@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+server.log
+workflows/*.json
+!workflows/.gitkeep
+.DS_Store

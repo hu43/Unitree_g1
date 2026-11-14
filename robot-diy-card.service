@@ -1,0 +1,28 @@
+[Unit]
+Description=G1 DIY Command Card Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=unitree
+Group=unitree
+WorkingDirectory=/home/unitree/robot-diy-card
+Environment=G1_IFACE=eth0
+Environment=G1_PORT=8080
+Environment=G1_MAX_SPEED=0.6
+Environment=G1_DRY_RUN=0
+Environment=G1_WATCHDOG=8
+Environment=G1_VOLUME=100
+Environment=G1_VOICE_ENABLE=1
+Environment=G1_TURN_RATE=1.0
+Environment=PYTHONPATH=/home/unitree/.local/lib/python3.8/site-packages
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/unitree/robot-diy-card/g1_card_server.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/unitree/robot-diy-card/server.log
+StandardError=append:/home/unitree/robot-diy-card/server.log
+
+[Install]
+WantedBy=multi-user.target

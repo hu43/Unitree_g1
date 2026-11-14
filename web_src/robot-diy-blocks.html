@@ -1,0 +1,922 @@
+<div id="diy-robot-tool">
+  <style>
+    #diy-robot-tool{display:flex;flex-direction:column;gap:12px;width:100%;color:var(--foreground);}
+    #diy-robot-tool .hdr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;}
+    #diy-robot-tool .hdr h2{margin:0;font-weight:500;}
+    #diy-robot-tool .hdr .sub{color:var(--muted-foreground);}
+    #diy-robot-tool .hdr .spacer{flex:1 1 20px;}
+    #diy-robot-tool .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+    #diy-robot-tool .toolbar .sep{width:1px;height:22px;background:var(--border);margin:0 2px;}
+    #diy-robot-tool .field{display:inline-flex;align-items:center;gap:6px;color:var(--muted-foreground);}
+    #diy-robot-tool .field input,#diy-robot-tool .field select{width:auto;min-width:64px;}
+    #diy-robot-tool .runline{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;}
+    #diy-robot-tool .runline .progress{flex:1 1 220px;min-width:160px;}
+    #diy-robot-tool #diy-now{color:var(--muted-foreground);flex:1 1 200px;min-width:0;}
+    #diy-robot-tool .grid{display:grid;grid-template-columns:minmax(180px,220px) minmax(0,1fr) minmax(280px,340px);gap:12px;align-items:start;}
+    #diy-robot-tool .panel-title{display:flex;align-items:center;gap:6px;margin:0 0 8px;color:var(--muted-foreground);}
+    #diy-robot-tool .palette{display:flex;flex-direction:column;gap:10px;}
+    #diy-robot-tool .pal-group{display:flex;flex-direction:column;gap:6px;}
+    #diy-robot-tool .pal-title{color:var(--muted-foreground);}
+    #diy-robot-tool .pal-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 9px;text-align:left;color:var(--foreground);background:transparent;border:1px solid var(--border);border-radius:8px;}
+    #diy-robot-tool .pal-item:hover{background:var(--muted);}
+    #diy-robot-tool .pal-item .dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--mc);}
+    #diy-robot-tool .pal-item .pgrip{display:inline-flex;color:var(--muted-foreground);}
+    #diy-robot-tool .pal-item .phint{margin-left:auto;color:var(--muted-foreground);}
+    #diy-robot-tool .script .card{min-height:100%;}
+    #diy-robot-tool .blocks-wrap{position:relative;}
+    #diy-robot-tool .blocks{display:flex;flex-direction:column;gap:7px;min-height:430px;padding:2px 0;}
+    #diy-robot-tool .empty-hint{display:flex;align-items:center;justify-content:center;min-height:200px;padding:16px;text-align:center;color:var(--muted-foreground);border:1px dashed var(--border);border-radius:10px;}
+    #diy-robot-tool .blk{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--border);border-left:4px solid var(--mc);border-radius:10px;background:color-mix(in srgb, var(--mc) 12%, transparent);position:relative;}
+    #diy-robot-tool .blk::before{content:"";position:absolute;top:-5px;left:26px;width:22px;height:9px;border-radius:6px;background:color-mix(in srgb, var(--mc) 12%, var(--background));border:1px solid var(--border);border-bottom:none;}
+    #diy-robot-tool .blk::after{content:"";position:absolute;bottom:-6px;left:31px;width:12px;height:10px;border-radius:50%;background:var(--background);border:1px solid var(--border);border-top:none;}
+    #diy-robot-tool .blk.active{outline:2px solid var(--primary);outline-offset:1px;}
+    #diy-robot-tool .blk.dragging{opacity:.45;}
+    #diy-robot-tool .blk .grip{display:inline-flex;align-items:center;color:var(--muted-foreground);}
+    #diy-robot-tool .blk .blk-label{font-weight:500;white-space:nowrap;}
+    #diy-robot-tool .blk .blk-unit{color:var(--muted-foreground);}
+    #diy-robot-tool .blk-input{min-width:0;padding:2px 4px;color:inherit;font:inherit;text-align:center;background:transparent;border:1px solid transparent;border-bottom:1px dashed var(--border);border-radius:4px;}
+    #diy-robot-tool .blk-input:hover{border-bottom-color:var(--muted-foreground);}
+    #diy-robot-tool .blk-input.num{width:4.6em;flex:0 0 auto;}
+    #diy-robot-tool .blk-input.text{flex:1 1 140px;text-align:left;}
+    #diy-robot-tool .blk-ctrl{display:inline-flex;align-items:center;gap:2px;margin-left:auto;}
+    #diy-robot-tool .mini{display:grid;place-items:center;width:26px;height:26px;padding:0;color:var(--muted-foreground);background:transparent;border:0;border-radius:6px;}
+    #diy-robot-tool .mini:hover{background:var(--muted);color:var(--foreground);}
+    #diy-robot-tool #diy-drop{position:absolute;left:0;right:0;height:0;display:none;border-top:2px dashed var(--primary);pointer-events:none;}
+    #diy-robot-tool .cat-move{--mc:var(--blue);}
+    #diy-robot-tool .cat-arm{--mc:var(--orange);}
+    #diy-robot-tool .cat-say{--mc:var(--purple);}
+    #diy-robot-tool .cat-ctrl{--mc:var(--yellow);}
+    #diy-robot-tool .stage{display:flex;flex-direction:column;gap:10px;min-width:0;}
+    #diy-robot-tool .map-wrap{position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:color-mix(in srgb, var(--muted) 45%, transparent);}
+    #diy-robot-tool .map-wrap svg{display:block;width:100%;height:auto;}
+    #diy-robot-tool .speech{position:absolute;max-width:74%;padding:7px 10px;border:1px solid var(--border);border-radius:10px;background:var(--popover);color:var(--popover-foreground);transform:translate(-50%,-100%);box-shadow:0 8px 24px rgba(0,0,0,.28);}
+    #diy-robot-tool .speech::after{content:"";position:absolute;left:50%;bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:var(--popover);border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+    #diy-robot-tool .pose{display:flex;align-items:center;gap:12px;min-width:0;}
+    #diy-robot-tool .pose svg{flex:0 0 auto;}
+    #diy-robot-tool .pose-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
+    #diy-robot-tool .pose-meta .k{color:var(--muted-foreground);}
+    #diy-robot-tool #diy-pose-label{font-weight:500;}
+    #diy-robot-tool #diy-summary{color:var(--muted-foreground);}
+    #diy-robot-tool .running .blocks .blk{pointer-events:none;}
+    #diy-robot-tool .running .palette{pointer-events:none;opacity:.6;}
+    @media (pointer:coarse){
+      #diy-robot-tool .mini{width:38px;height:38px;}
+      #diy-robot-tool .blk-input{font-size:16px;}
+    }
+    @media (max-width:1120px){
+      #diy-robot-tool .grid{grid-template-columns:minmax(170px,210px) minmax(0,1fr);}
+      #diy-robot-tool .stage{grid-column:1/-1;max-width:520px;}
+    }
+    @media (max-width:720px){
+      #diy-robot-tool .grid{grid-template-columns:1fr;}
+      #diy-robot-tool .stage{max-width:none;}
+      #diy-robot-tool .blocks{min-height:0;}
+    }
+  </style>
+
+  <div class="hdr">
+    <h2>机器人 DIY 指令卡</h2>
+    <span class="sub text-small">拖拽积木拼接动作，点击运行在俯视地图上演算</span>
+    <span class="spacer"></span>
+    <span class="viz-badge" id="diy-status">待命</span>
+  </div>
+
+  <div class="toolbar">
+    <button type="button" class="btn btn-primary" id="diy-run"><i data-lucide="play" aria-hidden="true"></i>运行</button>
+    <button type="button" class="btn" id="diy-stop" disabled><i data-lucide="square" aria-hidden="true"></i>停止</button>
+    <button type="button" class="btn btn-ghost" id="diy-reset"><i data-lucide="rotate-ccw" aria-hidden="true"></i>重置</button>
+    <span class="sep"></span>
+    <button type="button" class="btn btn-ghost" id="diy-example">载入示例</button>
+    <button type="button" class="btn btn-ghost" id="diy-clear">清空</button>
+    <span class="sep"></span>
+    <label class="field text-small">演示倍速
+      <select class="form-select" id="diy-rate">
+        <option value="1">1×</option>
+        <option value="2" selected>2×</option>
+        <option value="4">4×</option>
+      </select>
+    </label>
+    <label class="field text-small">步速
+      <input class="form-control" type="number" id="diy-speed" min="0.1" max="1.5" step="0.1" value="0.5">
+      m/s
+    </label>
+  </div>
+
+  <div class="runline">
+    <div class="progress" role="progressbar" aria-label="执行进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="diy-progress">
+      <div class="progress-bar" id="diy-progressbar" style="width:0%"></div>
+    </div>
+    <div id="diy-now" aria-live="polite">就绪</div>
+    <div id="diy-summary" class="text-small"></div>
+  </div>
+
+  <div class="grid">
+    <section class="palette" aria-label="积木模块库">
+      <div class="panel-title text-small"><i data-lucide="blocks" aria-hidden="true"></i>模块库</div>
+      <div id="diy-palette"></div>
+      <div class="text-small text-muted">拖拽到中间，或点击直接追加</div>
+    </section>
+
+    <section class="script" aria-label="工作流拼接区">
+      <div class="panel-title text-small"><i data-lucide="list-tree" aria-hidden="true"></i>工作流 <span id="diy-count"></span></div>
+      <div class="card">
+        <div class="blocks-wrap" id="diy-blocks-wrap">
+          <div class="blocks" id="diy-blocks"></div>
+          <div id="diy-drop"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stage" aria-label="机器人演算舞台">
+      <div class="panel-title text-small"><i data-lucide="map" aria-hidden="true"></i>演算舞台</div>
+      <div class="map-wrap" id="diy-map-wrap">
+        <svg id="diy-map" viewBox="0 0 360 420" role="img" aria-labelledby="diy-map-title">
+          <title id="diy-map-title">机器人行走俯视图，起点在下方，讲解点随工作流标注</title>
+          <defs>
+            <pattern id="diy-grid" width="47.5" height="47.5" patternUnits="userSpaceOnUse">
+              <path d="M47.5 0H0V47.5" fill="none" style="stroke:var(--border);stroke-width:1;opacity:.5"/>
+            </pattern>
+          </defs>
+          <rect x="0" y="0" width="360" height="420" fill="url(#diy-grid)"/>
+          <polyline id="diy-route" fill="none" style="stroke:var(--border);stroke-width:2;stroke-dasharray:5 6"/>
+          <polyline id="diy-trail" fill="none" style="stroke:var(--primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.85"/>
+          <g id="diy-markers"></g>
+          <g id="diy-start-mark">
+            <circle cx="180" cy="380" r="4" style="fill:var(--muted-foreground)"/>
+            <text x="190" y="384" style="fill:var(--muted-foreground);font-size:12px">起点</text>
+          </g>
+          <g id="diy-robot-g" transform="translate(180 380)">
+            <circle r="13" style="fill:var(--primary);opacity:.2"/>
+            <path d="M0 -11 L8 8 L0 3.5 L-8 8 Z" style="fill:var(--primary)"/>
+          </g>
+        </svg>
+        <div class="speech" id="diy-speech" hidden> </div>
+      </div>
+
+      <div class="pose">
+        <svg viewBox="0 0 120 130" width="86" height="94" role="img" aria-label="机器人上身姿态示意">
+          <line id="diy-arm-l" x1="44" y1="62" x2="44" y2="94" style="stroke:var(--orange);stroke-width:9;stroke-linecap:round"/>
+          <line id="diy-arm-r" x1="76" y1="62" x2="76" y2="94" style="stroke:var(--orange);stroke-width:9;stroke-linecap:round"/>
+          <rect x="42" y="52" width="36" height="46" rx="15" style="fill:color-mix(in srgb, var(--blue) 16%, transparent);stroke:var(--border)"/>
+          <circle cx="60" cy="34" r="15" style="fill:var(--card);stroke:var(--border)"/>
+          <circle cx="55" cy="33" r="2" style="fill:var(--foreground)"/>
+          <circle cx="65" cy="33" r="2" style="fill:var(--foreground)"/>
+        </svg>
+        <div class="pose-meta">
+          <div class="k text-small">手臂姿态</div>
+          <div id="diy-pose-label">自然下垂</div>
+          <div class="text-small text-muted">地图看位置，右图看上身动作</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+(function(){
+  const root = document.getElementById('diy-robot-tool');
+  if (!root) return;
+  const $ = id => document.getElementById(id);
+  const paletteEl = $('diy-palette');
+  const blocksEl = $('diy-blocks');
+  const blocksWrap = $('diy-blocks-wrap');
+  const dropEl = $('diy-drop');
+  const routeEl = $('diy-route');
+  const trailEl = $('diy-trail');
+  const markersEl = $('diy-markers');
+  const robotEl = $('diy-robot-g');
+  const armLEl = $('diy-arm-l');
+  const armREl = $('diy-arm-r');
+  const speechEl = $('diy-speech');
+  const statusEl = $('diy-status');
+  const nowEl = $('diy-now');
+  const sumEl = $('diy-summary');
+  const countEl = $('diy-count');
+  const progEl = $('diy-progress');
+  const barEl = $('diy-progressbar');
+  const runBtn = $('diy-run');
+  const stopBtn = $('diy-stop');
+  const resetBtn = $('diy-reset');
+  const exampleBtn = $('diy-example');
+  const clearBtn = $('diy-clear');
+  const rateSel = $('diy-rate');
+  const speedIn = $('diy-speed');
+  const poseLabel = $('diy-pose-label');
+
+  const CAT = {
+    move:{label:'移动'},
+    arm:{label:'手臂动作'},
+    say:{label:'语音播报'},
+    ctrl:{label:'流程控制'}
+  };
+
+  const DEFS = {
+    move_forward:{cat:'move',label:'向前走',icon:'arrow-up',param:{kind:'num',unit:'m',value:2,min:.05,step:.1}},
+    move_back:{cat:'move',label:'向后走',icon:'arrow-down',param:{kind:'num',unit:'m',value:1,min:.05,step:.1}},
+    move_left:{cat:'move',label:'向左走',icon:'arrow-left',param:{kind:'num',unit:'m',value:1,min:.05,step:.1}},
+    move_right:{cat:'move',label:'向右走',icon:'arrow-right',param:{kind:'num',unit:'m',value:1,min:.05,step:.1}},
+    turn_left:{cat:'move',label:'左转',icon:'rotate-ccw',param:{kind:'num',unit:'°',value:90,min:1,step:15}},
+    turn_right:{cat:'move',label:'右转',icon:'rotate-cw',param:{kind:'num',unit:'°',value:90,min:1,step:15}},
+    wave_right:{cat:'arm',label:'右臂挥手',icon:'hand'},
+    wave_left:{cat:'arm',label:'左臂挥手',icon:'hand'},
+    wave_forward:{cat:'arm',label:'向前挥手',icon:'hand'},
+    arm_down:{cat:'arm',label:'放下手臂',icon:'arrow-down'},
+    reset:{cat:'arm',label:'复位',icon:'rotate-ccw'},
+    speak:{cat:'say',label:'播报',icon:'message-square',param:{kind:'text',value:'大家好'}},
+    wait:{cat:'ctrl',label:'停顿',icon:'timer',param:{kind:'num',unit:'秒',value:2,min:0,step:.5}}
+  };
+
+  const PALETTE = [
+    ['move',['move_forward','move_back','move_left','move_right','turn_left','turn_right']],
+    ['arm',['wave_right','wave_left','wave_forward','arm_down','reset']],
+    ['say',['speak']],
+    ['ctrl',['wait']]
+  ];
+
+  const DEMO = [
+    ['move_forward',2],
+    ['wave_right',null],
+    ['speak','这是朝野科技的荣誉墙'],
+    ['arm_down',null],
+    ['wait',2],
+    ['move_forward',0.6],
+    ['speak','前面是我们的公司的专利'],
+    ['wave_forward',null],
+    ['arm_down',null],
+    ['move_left',0.4],
+    ['speak','这个是我们机器人的办公区域，谢谢大家']
+  ];
+
+  let uid = 0;
+  const newId = () => 'b' + (++uid) + '_' + Math.random().toString(36).slice(2,6);
+  const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+
+  const S = {blocks:[],speed:0.5,rate:2,running:false,cancelled:false,scale:95,activeIdx:-1};
+  const robot = {x:0,y:0,heading:0};
+  const arm = {mode:'down',walking:false};
+  let trail = [];
+  let dragType = null, dragId = null, dropIndex = 0, saveTimer = null;
+
+  function makeBlock(type,value){
+    const def = DEFS[type];
+    const v = value !== undefined && value !== null ? value : (def.param ? def.param.value : null);
+    return {id:newId(),type,value:v};
+  }
+  function demoBlocks(){ return DEMO.map(([t,v]) => makeBlock(t,v)); }
+
+  /* ---------- palette ---------- */
+  function buildPalette(){
+    paletteEl.innerHTML = '';
+    PALETTE.forEach(([cat,types])=>{
+      const g = document.createElement('div');
+      g.className = 'pal-group cat-' + cat;
+      const t = document.createElement('div');
+      t.className = 'pal-title text-small';
+      t.textContent = CAT[cat].label;
+      g.append(t);
+      types.forEach(type=>{
+        const def = DEFS[type];
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pal-item cat-' + cat;
+        b.draggable = true;
+        b.dataset.type = type;
+        b.setAttribute('aria-label','添加模块：' + def.label);
+        b.innerHTML = '<span class="dot"></span><span class="pgrip"><i data-lucide="' + def.icon + '" aria-hidden="true"></i></span><span class="plabel"></span><span class="phint text-small">+</span>';
+        b.querySelector('.plabel').textContent = def.label;
+        b.addEventListener('dragstart', e=>{
+          dragType = 'new:' + type; dragId = null;
+          e.dataTransfer.setData('text/plain', dragType);
+          e.dataTransfer.effectAllowed = 'copy';
+        });
+        b.addEventListener('dragend', ()=>{ dragType = null; });
+        b.addEventListener('click', ()=>{
+          if (S.running) return;
+          S.blocks.push(makeBlock(type));
+          renderScript(); updateRoute(); saveSoon();
+        });
+        g.append(b);
+      });
+      paletteEl.append(g);
+    });
+  }
+
+  /* ---------- script ---------- */
+  function renderScript(){
+    blocksEl.innerHTML = '';
+    S.blocks.forEach((b,idx)=>{
+      const def = DEFS[b.type];
+      const el = document.createElement('div');
+      el.className = 'blk cat-' + def.cat + (idx === S.activeIdx ? ' active' : '');
+      el.dataset.id = b.id;
+      el.draggable = true;
+
+      const grip = document.createElement('span');
+      grip.className = 'grip';
+      grip.innerHTML = '<i data-lucide="' + def.icon + '" aria-hidden="true"></i>';
+
+      const label = document.createElement('span');
+      label.className = 'blk-label';
+      label.textContent = def.label;
+      el.append(grip,label);
+
+      if (def.param && def.param.kind === 'num'){
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.className = 'blk-input num';
+        inp.value = b.value; inp.min = def.param.min; inp.step = def.param.step;
+        inp.setAttribute('aria-label', def.label + '（' + def.param.unit + '）');
+        const unit = document.createElement('span');
+        unit.className = 'blk-unit'; unit.textContent = def.param.unit;
+        el.append(inp,unit);
+      } else if (def.param && def.param.kind === 'text'){
+        const inp = document.createElement('input');
+        inp.type = 'text'; inp.className = 'blk-input text';
+        inp.value = b.value;
+        inp.setAttribute('aria-label','播报文本');
+        el.append(inp);
+      }
+
+      const ctrl = document.createElement('span');
+      ctrl.className = 'blk-ctrl';
+      ctrl.innerHTML =
+        '<button type="button" class="mini" data-act="up" aria-label="上移"><i data-lucide="chevron-up"></i></button>' +
+        '<button type="button" class="mini" data-act="down" aria-label="下移"><i data-lucide="chevron-down"></i></button>' +
+        '<button type="button" class="mini" data-act="del" aria-label="删除"><i data-lucide="x"></i></button>';
+      el.append(ctrl);
+
+      el.addEventListener('dragstart', e=>{
+        if (S.running){ e.preventDefault(); return; }
+        dragType = 'move:' + b.id; dragId = b.id;
+        e.dataTransfer.setData('text/plain', dragType);
+        e.dataTransfer.effectAllowed = 'move';
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', ()=>{
+        el.classList.remove('dragging');
+        dragType = null; dragId = null; hideDrop();
+      });
+
+      blocksEl.append(el);
+    });
+    if (!S.blocks.length){
+      const hint = document.createElement('div');
+      hint.className = 'empty-hint';
+      hint.textContent = '把左侧模块拖到这里，或点击模块快速添加';
+      blocksEl.append(hint);
+    }
+    if (window.lucide && lucide.createIcons) lucide.createIcons({attrs:{width:16,height:16}});
+    updateSummary();
+  }
+
+  blocksEl.addEventListener('mousedown', e=>{
+    const blk = e.target.closest('.blk');
+    if (!blk) return;
+    if (e.target.closest('input, button')) blk.draggable = false;
+  });
+  document.addEventListener('mouseup', ()=>{
+    blocksEl.querySelectorAll('.blk[draggable="false"]').forEach(el=>{ el.draggable = true; });
+  });
+
+  blocksEl.addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-act]');
+    if (!btn || S.running) return;
+    const blk = e.target.closest('.blk');
+    if (!blk) return;
+    const idx = S.blocks.findIndex(b=>b.id === blk.dataset.id);
+    if (idx < 0) return;
+    const act = btn.dataset.act;
+    if (act === 'del') S.blocks.splice(idx,1);
+    if (act === 'up' && idx > 0){ const t = S.blocks[idx-1]; S.blocks[idx-1] = S.blocks[idx]; S.blocks[idx] = t; }
+    if (act === 'down' && idx < S.blocks.length - 1){ const t = S.blocks[idx+1]; S.blocks[idx+1] = S.blocks[idx]; S.blocks[idx] = t; }
+    renderScript(); updateRoute(); saveSoon();
+  });
+
+  blocksEl.addEventListener('input', e=>{
+    const inp = e.target;
+    if (!inp.classList || !inp.classList.contains('blk-input')) return;
+    const blk = inp.closest('.blk');
+    if (!blk) return;
+    const b = S.blocks.find(x=>x.id === blk.dataset.id);
+    if (!b) return;
+    const def = DEFS[b.type];
+    if (def.param && def.param.kind === 'num'){
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v)) b.value = v;
+    } else {
+      b.value = inp.value;
+    }
+    updateSummary(); updateRoute(); saveSoon();
+  });
+  blocksEl.addEventListener('blur', e=>{
+    const inp = e.target;
+    if (!inp.classList || !inp.classList.contains('blk-input')) return;
+    const blk = inp.closest('.blk');
+    if (!blk) return;
+    const b = S.blocks.find(x=>x.id === blk.dataset.id);
+    if (!b) return;
+    const def = DEFS[b.type];
+    if (def.param.kind === 'num'){
+      const v = parseFloat(inp.value);
+      if (!Number.isFinite(v)){ b.value = def.param.value; inp.value = b.value; }
+    }
+  }, true);
+
+  /* ---------- drag & drop ---------- */
+  function hideDrop(){ dropEl.style.display = 'none'; }
+
+  function visibleBlocks(){
+    return Array.prototype.slice.call(blocksEl.querySelectorAll('.blk')).filter(el=>el.dataset.id !== dragId);
+  }
+  function computeIndex(clientY){
+    const els = visibleBlocks();
+    for (let i = 0; i < els.length; i++){
+      const r = els[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return i;
+    }
+    return els.length;
+  }
+  function showDrop(idx){
+    const els = visibleBlocks();
+    const wrapRect = blocksWrap.getBoundingClientRect();
+    let top;
+    if (!els.length) top = 0;
+    else if (idx < els.length) top = els[idx].getBoundingClientRect().top - wrapRect.top - 4;
+    else top = els[els.length-1].getBoundingClientRect().bottom - wrapRect.top + 3;
+    dropEl.style.top = top + 'px';
+    dropEl.style.display = 'block';
+  }
+
+  blocksWrap.addEventListener('dragover', e=>{
+    if (!dragType || S.running) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = dragType.indexOf('new:') === 0 ? 'copy' : 'move';
+    dropIndex = computeIndex(e.clientY);
+    showDrop(dropIndex);
+  });
+  blocksWrap.addEventListener('dragleave', e=>{
+    if (!e.relatedTarget || !blocksWrap.contains(e.relatedTarget)) hideDrop();
+  });
+  blocksWrap.addEventListener('drop', e=>{
+    if (!dragType || S.running) return;
+    e.preventDefault();
+    const data = e.dataTransfer.getData('text/plain') || dragType;
+    hideDrop();
+    if (data.indexOf('new:') === 0){
+      S.blocks.splice(Math.max(0,Math.min(dropIndex,S.blocks.length)),0,makeBlock(data.slice(4)));
+    } else if (data.indexOf('move:') === 0){
+      const id = data.slice(5);
+      const from = S.blocks.findIndex(b=>b.id === id);
+      if (from >= 0){
+        const moved = S.blocks.splice(from,1)[0];
+        let to = dropIndex;
+        if (from < to) to--;
+        to = Math.max(0,Math.min(to,S.blocks.length));
+        S.blocks.splice(to,0,moved);
+      }
+    }
+    dragType = null; dragId = null;
+    renderScript(); updateRoute(); saveSoon();
+  });
+
+  /* ---------- map ---------- */
+  const MAPW = 360, MAPH = 420;
+  S.originX = 180; S.originY = 380;
+  function mapX(x){ return S.originX + x * S.scale; }
+  function mapY(y){ return S.originY - y * S.scale; }
+
+  function routeData(){
+    let x = 0, y = 0, h = 0;
+    const pts = [[0,0]];
+    const marks = [];
+    let dist = 0;
+    S.blocks.forEach(b=>{
+      const v = num(b.value);
+      if (b.type === 'move_forward'){ x += Math.sin(h)*v; y += Math.cos(h)*v; dist += v; pts.push([x,y]); }
+      else if (b.type === 'move_back'){ x -= Math.sin(h)*v; y -= Math.cos(h)*v; dist += v; pts.push([x,y]); }
+      else if (b.type === 'move_left'){ x -= Math.cos(h)*v; y += Math.sin(h)*v; dist += v; pts.push([x,y]); }
+      else if (b.type === 'move_right'){ x += Math.cos(h)*v; y -= Math.sin(h)*v; dist += v; pts.push([x,y]); }
+      else if (b.type === 'turn_left'){ h -= Math.abs(v)*Math.PI/180; pts.push([x,y]); }
+      else if (b.type === 'turn_right'){ h += Math.abs(v)*Math.PI/180; pts.push([x,y]); }
+      else if (b.type === 'speak'){ marks.push({x,y,text:String(b.value || '')}); }
+    });
+    return {pts,marks,dist};
+  }
+
+  function updateRoute(){
+    const data = routeData();
+    let maxX = 0, maxY = 0, minX = 0, minY = 0;
+    data.pts.forEach(p=>{
+      maxX = Math.max(maxX,p[0]); maxY = Math.max(maxY,p[1]);
+      minX = Math.min(minX,p[0]); minY = Math.min(minY,p[1]);
+    });
+    const candidates = [
+      95,
+      (MAPH - 58 - 26) / Math.max(0.2, maxY - minY),
+      (MAPW - 26 - 180) / Math.max(0.2, maxX),
+      (180 - 26) / Math.max(0.2, -minX),
+      (380 - 26) / Math.max(0.2, -minY)
+    ];
+    S.scale = Math.max(18, Math.min.apply(null,candidates));
+
+    const routeH = (maxY - minY) * S.scale;
+    const top = 56 + Math.max(0, (MAPH - 56 - 26 - routeH) / 2);
+    S.originY = Math.max(120, Math.min(380, top + maxY * S.scale));
+    const startG = document.getElementById('diy-start-mark');
+    if (startG) startG.setAttribute('transform','translate(0 ' + (S.originY - 380).toFixed(1) + ')');
+
+    routeEl.setAttribute('points', data.pts.map(p=>mapX(p[0]).toFixed(1) + ',' + mapY(p[1]).toFixed(1)).join(' '));
+
+    let html = '';
+    data.marks.forEach((m,i)=>{
+      const px = mapX(m.x), py = mapY(m.y);
+      const leftSide = m.x < -0.01;
+      const tx = leftSide ? px - 10 : px + 10;
+      const anchor = leftSide ? 'end' : 'start';
+      html += '<g><circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="3.5" style="fill:var(--purple)"/>' +
+              '<text x="' + tx.toFixed(1) + '" y="' + (py + 4).toFixed(1) + '" text-anchor="' + anchor + '" style="fill:var(--muted-foreground);font-size:12px">讲解点 ' + (i+1) + '</text></g>';
+    });
+    markersEl.innerHTML = html;
+    updateSummary(data);
+    if (!S.running){
+      trail = [];
+      trailEl.setAttribute('points','');
+      drawStage(false);
+    }
+  }
+
+  function drawStage(push){
+    const px = mapX(robot.x), py = mapY(robot.y);
+    robotEl.setAttribute('transform','translate(' + px.toFixed(1) + ' ' + py.toFixed(1) + ') rotate(' + (robot.heading*180/Math.PI).toFixed(1) + ')');
+    if (push !== false){
+      const last = trail[trail.length-1];
+      if (!last || Math.hypot(px-last[0], py-last[1]) > 1.2){
+        trail.push([px,py]);
+        trailEl.setAttribute('points', trail.map(p=>p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '));
+      }
+    }
+    if (!speechEl.hidden){
+      speechEl.style.left = (px / MAPW * 100).toFixed(2) + '%';
+      speechEl.style.top = ((py - 28) / MAPH * 100).toFixed(2) + '%';
+    }
+    drawPose();
+  }
+
+  function drawPose(){
+    const t = performance.now() / 1000;
+    let r = 0, l = 0;
+    if (arm.walking){
+      r = Math.sin(t*6)*7;
+      l = -r;
+    }
+    if (arm.mode === 'right') r = -142 + Math.sin(t*9)*16;
+    if (arm.mode === 'left') l = 142 - Math.sin(t*9)*16;
+    if (arm.mode === 'both'){ r = -118 + Math.sin(t*9)*12; l = 118 - Math.sin(t*9)*12; }
+    armREl.setAttribute('transform','rotate(' + r.toFixed(1) + ' 76 62)');
+    armLEl.setAttribute('transform','rotate(' + l.toFixed(1) + ' 44 62)');
+    const names = {right:'右臂挥手',left:'左臂挥手',both:'向前挥手',down:'自然下垂'};
+    poseLabel.textContent = names[arm.mode] || '自然下垂';
+  }
+
+  function showSpeech(text, fullText){
+    speechEl.hidden = false;
+    speechEl.textContent = text;
+    if (fullText != null){
+      speechEl.style.minWidth = Math.min(230, Math.max(76, fullText.length * 13 + 22)) + 'px';
+    }
+    drawStage(false);
+  }
+  function hideSpeech(){ speechEl.hidden = true; }
+
+  function setActive(idx){
+    S.activeIdx = idx;
+    Array.prototype.forEach.call(blocksEl.querySelectorAll('.blk'), (el,i)=>{
+      el.classList.toggle('active', i === idx);
+    });
+  }
+
+  /* ---------- timing ---------- */
+  function blockDuration(b){
+    switch(b.type){
+      case 'move_forward': case 'move_back': case 'move_left': case 'move_right':
+        return Math.max(0.4, Math.abs(num(b.value)) / S.speed);
+      case 'turn_left': case 'turn_right':
+        return Math.max(0.3, Math.abs(num(b.value)) / 90 * 0.8);
+      case 'wave_right': case 'wave_left': case 'wave_forward':
+        return 1.8;
+      case 'arm_down': return 0.7;
+      case 'reset': return 0.9;
+      case 'speak': {
+        const t = String(b.value || '');
+        return Math.max(1.6, t.length * 0.13 + 1);
+      }
+      case 'wait': return Math.max(0, num(b.value));
+      default: return 1;
+    }
+  }
+  function totalDuration(){
+    return S.blocks.reduce((a,b)=>a + blockDuration(b), 0);
+  }
+  function ease(p){ return p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2; }
+
+  function anim(seconds, onFrame){
+    return new Promise(resolve=>{
+      const dur = Math.max(0, seconds * 1000 / S.rate);
+      if (dur <= 0){ onFrame(1); return resolve(); }
+      const t0 = performance.now();
+      function frame(now){
+        if (S.cancelled) return resolve();
+        const p = Math.min(1, (now - t0) / dur);
+        onFrame(p);
+        if (p < 1) requestAnimationFrame(frame); else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  /* ---------- execution ---------- */
+  async function execBlock(b, dur, onProgress){
+    const v = num(b.value);
+    setNow(describe(b));
+    arm.walking = false;
+    switch(b.type){
+      case 'move_forward': case 'move_back': case 'move_left': case 'move_right': {
+        const from = {x:robot.x, y:robot.y};
+        const h = robot.heading;
+        const d = Math.abs(v);
+        let dx = 0, dy = 0;
+        if (b.type === 'move_forward'){ dx = Math.sin(h); dy = Math.cos(h); }
+        if (b.type === 'move_back'){ dx = -Math.sin(h); dy = -Math.cos(h); }
+        if (b.type === 'move_left'){ dx = -Math.cos(h); dy = Math.sin(h); }
+        if (b.type === 'move_right'){ dx = Math.cos(h); dy = -Math.sin(h); }
+        arm.walking = true;
+        await anim(dur, p=>{
+          const e = ease(p);
+          robot.x = from.x + dx*d*e;
+          robot.y = from.y + dy*d*e;
+          drawStage();
+          onProgress(p);
+        });
+        arm.walking = false;
+        break;
+      }
+      case 'turn_left': case 'turn_right': {
+        const fromH = robot.heading;
+        const sign = b.type === 'turn_right' ? 1 : -1;
+        const ang = Math.abs(v) * Math.PI / 180 * sign;
+        arm.walking = true;
+        await anim(dur, p=>{
+          robot.heading = fromH + ang * ease(p);
+          drawStage(false);
+          onProgress(p);
+        });
+        arm.walking = false;
+        break;
+      }
+      case 'wave_right': case 'wave_left': case 'wave_forward': {
+        arm.mode = b.type === 'wave_right' ? 'right' : (b.type === 'wave_left' ? 'left' : 'both');
+        drawPose();
+        await anim(dur, p=>{ drawPose(); onProgress(p); });
+        break;
+      }
+      case 'arm_down': {
+        arm.mode = 'down';
+        await anim(dur, p=>{ drawPose(); onProgress(p); });
+        break;
+      }
+      case 'reset': {
+        arm.mode = 'down';
+        arm.walking = false;
+        const from = {x:robot.x, y:robot.y, h:robot.heading};
+        await anim(dur, p=>{
+          const e = ease(p);
+          robot.x = from.x * (1-e);
+          robot.y = from.y * (1-e);
+          robot.heading = from.h * (1-e);
+          trail = [];
+          trailEl.setAttribute('points','');
+          drawStage();
+          onProgress(p);
+        });
+        break;
+      }
+      case 'speak': {
+        const text = String(b.value || '');
+        showSpeech('', text);
+        await anim(dur, p=>{
+          const reveal = Math.min(1, p / 0.4);
+          speechEl.textContent = text.slice(0, Math.ceil(reveal * text.length));
+          onProgress(p);
+        });
+        speechEl.textContent = text;
+        hideSpeech();
+        break;
+      }
+      case 'wait': {
+        await anim(dur, p=>{
+          setNow('停顿 ' + (Math.max(0,(1-p))*v).toFixed(1) + ' 秒');
+          onProgress(p);
+        });
+        break;
+      }
+    }
+  }
+
+  function describe(b){
+    const v = num(b.value);
+    switch(b.type){
+      case 'move_forward': return '向前走 ' + v.toFixed(1) + ' m';
+      case 'move_back': return '向后走 ' + v.toFixed(1) + ' m';
+      case 'move_left': return '向左走 ' + v.toFixed(1) + ' m';
+      case 'move_right': return '向右走 ' + v.toFixed(1) + ' m';
+      case 'turn_left': return '左转 ' + v.toFixed(0) + '°';
+      case 'turn_right': return '右转 ' + v.toFixed(0) + '°';
+      case 'wave_right': return '右臂挥手';
+      case 'wave_left': return '左臂挥手';
+      case 'wave_forward': return '向前挥手';
+      case 'arm_down': return '放下手臂';
+      case 'reset': return '复位';
+      case 'speak': return '播报：' + String(b.value || '');
+      case 'wait': return '停顿 ' + v.toFixed(1) + ' 秒';
+      default: return '';
+    }
+  }
+
+  async function run(){
+    if (S.running) return;
+    if (!S.blocks.length){ setStatus('暂无指令'); return; }
+    S.running = true; S.cancelled = false;
+    root.classList.add('running');
+    runBtn.disabled = true; stopBtn.disabled = false; resetBtn.disabled = true;
+    exampleBtn.disabled = true; clearBtn.disabled = true;
+    setStatus('运行中');
+    resetStage();
+    const durs = S.blocks.map(blockDuration);
+    const total = durs.reduce((a,b)=>a+b,0) || 1;
+    let acc = 0;
+    try {
+      for (let i = 0; i < S.blocks.length; i++){
+        if (S.cancelled) break;
+        setActive(i);
+        const d = durs[i];
+        await execBlock(S.blocks[i], d, p=>setProgress((acc + p*d) / total));
+        if (S.cancelled) break;
+        acc += d;
+        setProgress(acc / total);
+      }
+      if (!S.cancelled){
+        setProgress(1);
+        setStatus('已完成');
+        setNow('流程执行完成');
+      } else {
+        setStatus('已停止');
+        setNow('已停止');
+      }
+    } finally {
+      S.running = false; S.cancelled = false;
+      root.classList.remove('running');
+      runBtn.disabled = false; stopBtn.disabled = true; resetBtn.disabled = false;
+      exampleBtn.disabled = false; clearBtn.disabled = false;
+      setActive(-1);
+      arm.walking = false;
+      drawPose();
+      hideSpeech();
+    }
+  }
+
+  function resetStage(){
+    robot.x = 0; robot.y = 0; robot.heading = 0;
+    arm.mode = 'down'; arm.walking = false;
+    trail = [];
+    trailEl.setAttribute('points','');
+    hideSpeech();
+    setProgress(0);
+    setNow('就绪');
+    drawStage(false);
+  }
+
+  function setProgress(p){
+    const v = Math.max(0, Math.min(100, p * 100));
+    barEl.style.width = v.toFixed(1) + '%';
+    progEl.setAttribute('aria-valuenow', v.toFixed(0));
+  }
+  function setStatus(t){ statusEl.textContent = t; }
+  function setNow(t){ nowEl.textContent = t; }
+
+  function updateSummary(data){
+    const d = data || routeData();
+    const total = totalDuration();
+    sumEl.textContent = S.blocks.length + ' 条指令 · 演示时长约 ' + total.toFixed(1) + ' 秒 · 路径约 ' + d.dist.toFixed(1) + ' m';
+    countEl.textContent = S.blocks.length ? '· ' + S.blocks.length + ' 条' : '';
+  }
+
+  /* ---------- state ---------- */
+  function saveSoon(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>{
+      try {
+        const payload = {modelContent:{blocks:S.blocks.map(b=>({type:b.type,value:b.value})),speed:S.speed},privateContent:{rate:S.rate}};
+        if (window.zcode && window.zcode.setWidgetState) window.zcode.setWidgetState(payload).catch(()=>{});
+      } catch(e){}
+    }, 400);
+  }
+  function applyState(ws, replace){
+    if (!ws) return false;
+    let applied = false;
+    try {
+      const src = ws.modelContent || ws;
+      if (Array.isArray(src.blocks)){
+        const blocks = src.blocks.filter(b=>b && DEFS[b.type]).map(b=>makeBlock(b.type,b.value));
+        if (replace || !S.blocks.length){ S.blocks = blocks; applied = true; }
+      }
+      if (src.speed != null && Number.isFinite(parseFloat(src.speed))){
+        S.speed = Math.max(0.1, Math.min(1.5, parseFloat(src.speed)));
+        speedIn.value = S.speed;
+        applied = true;
+      }
+      const rate = ws.privateContent && ws.privateContent.rate;
+      if (rate && [1,2,4].indexOf(Number(rate)) >= 0){ S.rate = Number(rate); rateSel.value = String(S.rate); }
+      return applied;
+    } catch(e){ return applied; }
+  }
+
+  /* ---------- wiring ---------- */
+  runBtn.addEventListener('click', run);
+  stopBtn.addEventListener('click', ()=>{
+    if (S.running){ S.cancelled = true; setStatus('停止中…'); }
+  });
+  resetBtn.addEventListener('click', ()=>{
+    if (S.running) return;
+    resetStage();
+    setStatus('待命');
+  });
+  exampleBtn.addEventListener('click', ()=>{
+    if (S.running) return;
+    S.blocks = demoBlocks();
+    renderScript(); updateRoute(); saveSoon();
+    resetStage(); setStatus('待命');
+  });
+  clearBtn.addEventListener('click', ()=>{
+    if (S.running) return;
+    S.blocks = [];
+    renderScript(); updateRoute(); saveSoon();
+    resetStage(); setStatus('待命');
+  });
+  rateSel.addEventListener('change', ()=>{ S.rate = Number(rateSel.value); saveSoon(); });
+  speedIn.addEventListener('input', ()=>{
+    const v = parseFloat(speedIn.value);
+    if (Number.isFinite(v) && v > 0){
+      S.speed = Math.max(0.1, Math.min(1.5, v));
+      updateSummary();
+    }
+  });
+  speedIn.addEventListener('change', ()=>{
+    const v = parseFloat(speedIn.value);
+    S.speed = Number.isFinite(v) ? Math.max(0.1, Math.min(1.5, v)) : 0.5;
+    speedIn.value = S.speed;
+    updateSummary(); saveSoon();
+  });
+
+  window.addEventListener('zcode:set_globals', e=>{
+    const g = e && e.detail && e.detail.globals;
+    if (g && g.widgetState){
+      applyState(g.widgetState,true);
+      renderScript(); updateRoute();
+    }
+  });
+
+  buildPalette();
+  let restored = false;
+  try {
+    if (window.zcode && window.zcode.widgetState){
+      restored = applyState(window.zcode.widgetState,true);
+    }
+  } catch(e){}
+  if (!restored){
+    S.blocks = demoBlocks();
+    const r = parseFloat(rateSel.value);
+    if (Number.isFinite(r)) S.rate = r;
+  }
+  renderScript();
+  updateRoute();
+  resetStage();
+  setStatus('待命');
+  if (window.lucide && lucide.createIcons) lucide.createIcons({attrs:{width:16,height:16}});
+
+  window.__robotCardHooks = {
+    run: run,
+    resetStage: resetStage,
+    setActive: setActive,
+    setProgress: setProgress,
+    setStatus: setStatus,
+    setNow: setNow,
+    showSpeech: showSpeech,
+    hideSpeech: hideSpeech,
+    drawStage: drawStage,
+    drawPose: drawPose,
+    renderScript: renderScript,
+    updateRoute: updateRoute,
+    robot: robot,
+    arm: arm,
+    getState: function(){ return S; }
+  };
+})();
+</script>
