@@ -1,0 +1,115 @@
+--- /home/jojo/hu/g1/joystick/music/music_helper.py	2026-09-01 11:42:35.000000000 +0800
++++ /home/jojo/.zcode/workspace/default/g1_bgm_patch/music_helper.py	2026-11-18 09:09:15.937343580 +0800
+@@ -22,9 +22,14 @@
+ if os.path.isdir(VENDOR):
+     sys.path.insert(0, VENDOR)                          # 免安装：使用项目自带的 python 包
+ 
+-from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber
++from unitree_sdk2py.core.channel import (
++    ChannelFactoryInitialize,
++    ChannelFactory,
++    ChannelSubscriber,
++)
+ from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
+ from unitree_sdk2py.g1.audio.g1_audio_client import AudioClient
++from cyclonedds.qos import Qos, Policy
+ 
+ NET = sys.argv[1] if len(sys.argv) > 1 else "eth0"
+ VOLUME = 90
+@@ -39,12 +44,12 @@
+ #   duration 截取的音乐时长（秒）：delay + duration == 动作时长 -> 音乐与动作同时自然结束
+ MUSIC = {
+     "Gangnam": {"file": "何鹏&PSY+-+江南Style.mp3", "start": 0.0},
+-    "Video22": {"file": "kungfu_video22_fix.mp3",   "start": 0.0},
++    "Video22": {"file": "kungfu_video22_fix.mp3",   "start": 2.5},  # 跳过开头 2.5s 轻柔前奏
+     # video25 广播体操动作(91.6s)：BGM 已换成功夫曲（不再用广播体操曲），
+     # 先播 4s 再开始动作（config.yaml music_lead: 4.0），动作结束时随 stop 事件停
+-    "Video25": {"file": "kungfu_video22_fix.mp3", "start": 0.0},
++    "Video25": {"file": "kungfu_video22_fix.mp3", "start": 2.5},  # 跳过开头 2.5s 轻柔前奏
+     # video27_fix(28.2s)：BGM 先播 4s（config.yaml music_lead: 4.0），动作结束时随 stop 事件停
+-    "Video27": {"file": "Scott Buckley - Wanderlust.mp3", "start": 0.0},
++    "Video27": {"file": "Scott Buckley - Wanderlust.mp3", "start": 1.0},  # 跳过 1.0s 静音
+     # Kungfu3(92.8s)：男儿当自强，BGM 先播 4s（config.yaml music_lead: 4.0）
+     "Kungfu3": {"file": "男儿当自强-林子祥.mp3", "start": 0.0},
+     # Jixiewu1 机械舞1(20.6s)：HOZIN，BGM 先播 4s（config.yaml music_lead: 4.0）
+@@ -206,12 +211,36 @@
+         except Exception as e:
+             print("[music] handler error: %s" % e)
+ 
+-    sub = ChannelSubscriber("rt/g1joystick/event", String_)
+-    sub.Init(handler)
++    # 去重：C++ 侧每个事件连发 3 帧，这里对 1 秒内重复的同名事件只处理一次。
++    _last = {"text": None, "t": 0.0}
+ 
+-    print("[music] helper ready on %s, topic rt/g1joystick/event, states=%s" % (NET, list(MUSIC)))
++    def handle_event(msg):
++        text = getattr(msg, "data", "") or ""
++        now = time.time()
++        if text == _last["text"] and (now - _last["t"]) < 1.0:
++            return
++        _last["text"] = text
++        _last["t"] = now
++        handler(msg)
++
++    # 轮询读取（而不是回调监听）：实测回调方式在动作执行期间会丢事件
++    # （5 次单帧 start 只收到 3 次、stop 全部丢失）。KEEP_LAST(20) 保证
++    # 处理当前事件期间到达的重复帧不会互相覆盖。
++    factory = ChannelFactory()
++    channel = factory.CreateChannel("rt/g1joystick/event", String_)
++    channel.SetReader(Qos(Policy.History.KeepLast(20)), None, 0)
++
++    print("[music] helper ready on %s, topic rt/g1joystick/event (polling), states=%s"
++          % (NET, list(MUSIC)))
+     while True:
+-        time.sleep(1)
++        try:
++            msg = channel.Read(None)
++        except Exception as e:
++            print("[music] read error: %s" % e)
++            time.sleep(0.5)
++            continue
++        if msg is not None:
++            handle_event(msg)
+ 
+ 
+ if __name__ == "__main__":
+--- /home/jojo/hu/g1/joystick/config/config.yaml	2026-09-08 21:55:45.000000000 +0800
++++ /home/jojo/.zcode/workspace/default/g1_bgm_patch/config.yaml	2026-11-18 08:54:29.621996152 +0800
+@@ -180,7 +180,7 @@
+     policy_file: config/policy/mimic/video22_fix/exported/video22_fix_clean.mnn
+     time_start: 0
+     time_end: 67.9
+-    music_lead: 4.0   # BGM 先播 4 秒再开始动作
++    music_lead: 1.5   # 已裁掉 2.5s 轻柔前奏；lead 同步缩短，动作与节拍对齐不变
+ 
+   Video25:
+     fps: 60
+@@ -189,7 +189,7 @@
+     policy_file: config/policy/mimic/video25/exported/video25_clean.mnn
+     time_start: 0
+     time_end: 91.6
+-    music_lead: 4.0   # BGM 先播 4 秒再开始动作
++    music_lead: 1.5   # 已裁掉 2.5s 轻柔前奏；lead 同步缩短
+     # BGM 换成 kungfu_video22_fix.mp3（不再是广播体操曲）：
+     # 配置在 music/music_helper.py 的 MUSIC["Video25"]，动作结束随 stop 事件停
+ 
+@@ -200,7 +200,7 @@
+     policy_file: config/policy/mimic/video27_fix/exported/video27_fix_clean.mnn
+     time_start: 0
+     time_end: 28.2
+-    music_lead: 4.0   # BGM 先播 4 秒再开始动作
++    music_lead: 3.0   # 已裁掉 1.0s 静音；lead 同步缩短
+ 
+   LeftPunch:
+     fps: 60
+--- /home/jojo/hu/g1/joystick/run.sh	2026-09-08 21:55:45.000000000 +0800
++++ /tmp/run.sh	2026-11-17 16:49:30.700221445 +0800
+@@ -24,7 +24,7 @@
+ PY3="$(command -v python3.8 || command -v python3)"
+ PYTHONPATH="${SCRIPT_DIR}/vendor${PYTHONPATH:+:${PYTHONPATH}}" \
+ LD_LIBRARY_PATH="${SCRIPT_DIR}/out/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+-"${PY3}" "${SCRIPT_DIR}/music/music_helper.py" eth0 &
++"${PY3}" -u "${SCRIPT_DIR}/music/music_helper.py" eth0 &
+ HELPER_PID=$!
+ trap 'kill ${HELPER_PID} 2>/dev/null' EXIT
+ 

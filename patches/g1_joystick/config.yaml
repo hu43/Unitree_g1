@@ -1,0 +1,290 @@
+# ============================================================
+# G1 遥控器多策略配置 v2（2026-09-01 重排键位，2026-09-08 增 Zhanmusi，16 组；Touqiu(投篮录制回放) 已解绑，状态保留备用（同 Video21））
+#
+# 遥控器绑定（官方遥控器按键，DSL 语法见 unitree_joystick_dsl.hpp）：
+#   F1 组合：  F1+Y -> Box      F1+A -> Box1     F1+X -> LeftPunch   F1+B -> RightPunch
+#   方向键+功能：Up+Y -> Video22  Up+X -> Kungfu3  Up+B -> Video25
+#   （Video21 策略不稳定，2026-09-01 已解除按键绑定，状态保留但不可触发）
+#   方向键+功能：Left+Y -> Bow    Left+A -> Zhanmusi  Left+X -> Su     Left+B -> Video28
+#   F3 组合：  F3+Up -> Gangnam  F3+Left -> Jixiewu1  F3+Right -> Jixiewu2  F3+Down -> Video27
+#   策略运行中(仅此四个出口，其余按键一律无效)：
+#     双击 Start -> Exit   （C++ 内置检查，最高优先级）
+#     超时(time_end) -> Exit
+#     姿态异常 -> Passive
+#     DDS 断连 -> Passive
+# 注: 遥控器第二个功能键(bit7) 网页端叫 F3、SDK 里叫 F2，同一物理键，
+#     本文件 DSL 中写 F2。
+# ============================================================
+FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    Box:
+      id: 3
+      type: Mimic
+
+    Box1:
+      id: 5
+      type: Mimic
+
+    Bow:
+      id: 6
+      type: Mimic
+
+    Gangnam:
+      id: 7
+      type: Mimic
+
+    Video22:
+      id: 8
+      type: Mimic
+
+    Video25:
+      id: 9
+      type: Mimic
+
+    Video27:
+      id: 10
+      type: Mimic
+
+    LeftPunch:
+      id: 11
+      type: Mimic
+
+    RightPunch:
+      id: 12
+      type: Mimic
+
+    Jixiewu1:
+      id: 13
+      type: Mimic
+
+    Jixiewu2:
+      id: 14
+      type: Mimic
+
+    Kungfu3:
+      id: 15
+      type: Mimic
+
+    Video21:
+      id: 16
+      type: Mimic
+
+    Su:
+      id: 17
+      type: Mimic
+
+    Video28:
+      id: 18
+      type: Mimic
+
+    Zhanmusi:
+      id: 19
+      type: Mimic
+
+    Touqiu:
+      id: 20
+      type: Replay
+
+    Exit:
+      id: 4
+
+  Passive:
+    mode: [
+      1,1,1,1,1,1,
+      1,1,1,1,1,1,
+      1,1,1,
+      1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,
+    ]
+    kd: [
+      3,3,3,3,3,3,
+      3,3,3,3,3,3,
+      3,3,3,
+      3,3,3,3,3,3,3,
+      3,3,3,3,3,3,3,
+    ]
+    transitions:
+      Box: "F1 + Y.on_pressed"        # F1按住 + Y按下沿 -> 拳击(box)
+      Box1: "F1 + A.on_pressed"       # F1按住 + A按下沿 -> 拳击(box1)
+      LeftPunch: "F1 + X.on_pressed"  # F1按住 + X按下沿 -> 左勾拳(LeftPunch)
+      RightPunch: "F1 + B.on_pressed" # F1按住 + B按下沿 -> 右拳(RightPunch_fix)
+      Bow: "left + Y.on_pressed"      # Left按住 + Y按下沿 -> 鞠躬(bow)
+      Su: "left + X.on_pressed"       # Left按住 + X按下沿 -> su
+      Video28: "left + B.on_pressed"  # Left按住 + B按下沿 -> video28
+      Zhanmusi: "left + A.on_pressed"   # Left按住 + A按下沿 -> zhanmusi
+      Video22: "up + Y.on_pressed"    # Up按住 + Y按下沿 -> video22功夫(BGM: kungfu_video22_fix.mp3)
+      Kungfu3: "up + X.on_pressed"    # Up按住 + X按下沿 -> Kungfu3
+      Video25: "up + B.on_pressed"    # Up按住 + B按下沿 -> video25广播体操(BGM: kungfu_video22_fix.mp3, 先播4s)
+      Gangnam: "F2 + up.on_pressed"    # F3按住 + ↑ -> 江南Style(BGM: 江南Style.mp3)
+      Jixiewu1: "F2 + left.on_pressed"  # F3按住 + ← -> 机械舞1(jixiewu1_fix)
+      Jixiewu2: "F2 + right.on_pressed" # F3按住 + → -> 机械舞2(jixiewu2_fix)
+      Video27: "F2 + down.on_pressed"   # F3按住 + ↓ -> video27(BGM: Wanderlust, BGM先播4s)
+
+  Exit:
+    transitions:
+      Box: "F1 + Y.on_pressed"
+      Box1: "F1 + A.on_pressed"
+      LeftPunch: "F1 + X.on_pressed"
+      RightPunch: "F1 + B.on_pressed"
+      Bow: "left + Y.on_pressed"
+      Su: "left + X.on_pressed"
+      Video28: "left + B.on_pressed"
+      Zhanmusi: "left + A.on_pressed"   # Left按住 + A按下沿 -> zhanmusi
+      Video22: "up + Y.on_pressed"
+      Kungfu3: "up + X.on_pressed"
+      Video25: "up + B.on_pressed"
+      Gangnam: "F2 + up.on_pressed"
+      Jixiewu1: "F2 + left.on_pressed"
+      Jixiewu2: "F2 + right.on_pressed"
+      Video27: "F2 + down.on_pressed"
+
+  Box:
+    fps: 60
+    motion_file: config/policy/mimic/box/params/video5_60hz.csv
+    policy_dir: config/policy/mimic/box/
+    policy_file: config/policy/mimic/box/exported/video5_clean.mnn
+    time_start: 0
+    time_end: 11
+
+  Box1:
+    fps: 60
+    motion_file: config/policy/mimic/box1/params/video12_60hz.csv
+    policy_dir: config/policy/mimic/box1/
+    policy_file: config/policy/mimic/box1/exported/video12_clean.mnn
+    time_start: 0
+    time_end: 11
+
+  Bow:
+    fps: 60
+    motion_file: config/policy/mimic/bow/params/bow_60hz.csv
+    policy_dir: config/policy/mimic/bow/
+    policy_file: config/policy/mimic/bow/exported/policy_bow.mnn
+    time_start: 0
+    time_end: 6.8
+
+  Gangnam:
+    fps: 60
+    motion_file: config/policy/mimic/unistore/params/G1_gangnam_style_V01.bvh_60hz.csv
+    policy_dir: config/policy/mimic/unistore/
+    policy_file: config/policy/mimic/unistore/exported/gangnam_style.mnn
+    time_start: 5.1
+    time_end: 25.5
+    music_lead: 4.0   # BGM 先播 4 秒再开始动作
+
+  Video22:
+    fps: 60
+    motion_file: config/policy/mimic/video22_fix/params/video22_fix_60hz.csv
+    policy_dir: config/policy/mimic/video22_fix/
+    policy_file: config/policy/mimic/video22_fix/exported/video22_fix_clean.mnn
+    time_start: 0
+    time_end: 67.9
+    music_lead: 1.5   # 已裁掉 2.5s 轻柔前奏；lead 同步缩短，动作与节拍对齐不变
+
+  Video25:
+    fps: 60
+    motion_file: config/policy/mimic/video25/params/video25_60hz.csv
+    policy_dir: config/policy/mimic/video25/
+    policy_file: config/policy/mimic/video25/exported/video25_clean.mnn
+    time_start: 0
+    time_end: 91.6
+    music_lead: 1.5   # 已裁掉 2.5s 轻柔前奏；lead 同步缩短
+    # BGM 换成 kungfu_video22_fix.mp3（不再是广播体操曲）：
+    # 配置在 music/music_helper.py 的 MUSIC["Video25"]，动作结束随 stop 事件停
+
+  Video27:
+    fps: 60
+    motion_file: config/policy/mimic/video27_fix/params/video27_fix_60hz.csv
+    policy_dir: config/policy/mimic/video27_fix/
+    policy_file: config/policy/mimic/video27_fix/exported/video27_fix_clean.mnn
+    time_start: 0
+    time_end: 28.2
+    music_lead: 3.0   # 已裁掉 1.0s 静音；lead 同步缩短
+
+  LeftPunch:
+    fps: 60
+    motion_file: config/policy/mimic/LeftPunch/params/LeftPunch_60hz.csv
+    policy_dir: config/policy/mimic/LeftPunch/
+    policy_file: config/policy/mimic/LeftPunch/exported/LeftPunch_clean.mnn
+    time_start: 0
+    time_end: 5.4
+
+  RightPunch:
+    fps: 60
+    motion_file: config/policy/mimic/RightPunch_fix/params/RightPunch_fix_60hz.csv
+    policy_dir: config/policy/mimic/RightPunch_fix/
+    policy_file: config/policy/mimic/RightPunch_fix/exported/RightPunch_fix_clean.mnn
+    time_start: 0
+    time_end: 5.9
+
+  Jixiewu1:
+    fps: 60
+    motion_file: config/policy/mimic/jixiewu1_fix/params/jixiewu1_fix_60hz.csv
+    policy_dir: config/policy/mimic/jixiewu1_fix/
+    policy_file: config/policy/mimic/jixiewu1_fix/exported/jixiewu1_fix_clean.mnn
+    time_start: 0
+    time_end: 20.57
+    music_lead: 4.0   # BGM(HOZIN机械舞曲) 先播 4 秒再开始动作
+
+  Jixiewu2:
+    fps: 60
+    motion_file: config/policy/mimic/jixiewu2_fix/params/jixiewu2_fix_60hz.csv
+    policy_dir: config/policy/mimic/jixiewu2_fix/
+    policy_file: config/policy/mimic/jixiewu2_fix/exported/jixiewu2_fix_clean.mnn
+    time_start: 0
+    time_end: 12.4
+    music_lead: 4.0   # BGM(嘻哈异想霓虹迪斯科) 先播 4 秒再开始动作
+
+  Kungfu3:
+    fps: 60
+    motion_file: config/policy/mimic/Kungfu3_fix/params/Kungfu3_fix_60hz.csv
+    policy_dir: config/policy/mimic/Kungfu3_fix/
+    policy_file: config/policy/mimic/Kungfu3_fix/exported/Kungfu3_fix_clean.mnn
+    time_start: 0
+    time_end: 92.83
+    music_lead: 12.5  # BGM(男儿当自强) 前奏播完(约12.5s 锣鼓)到林子祥开嗓，动作与人声同步起
+
+  # Video21: 已解除按键绑定（动作不稳定），状态保留备用，无 transitions 指向
+  Video21:
+    fps: 60
+    motion_file: config/policy/mimic/video21_fix/params/video21_fix_60hz.csv
+    policy_dir: config/policy/mimic/video21_fix/
+    policy_file: config/policy/mimic/video21_fix/exported/video21_fix_clean.mnn
+    time_start: 0
+    time_end: 40.67
+
+  Su:
+    fps: 60
+    motion_file: config/policy/mimic/su/params/su_60hz.csv
+    policy_dir: config/policy/mimic/su/
+    policy_file: config/policy/mimic/su/exported/su_clean.mnn
+    time_start: 0
+    time_end: 5.07
+    # BGM(SIUUU音效) 与动作同时起停，无 music_lead；cache/Su_0.0s.wav 已补齐到 5.07s
+
+  Video28:
+    fps: 60
+    motion_file: config/policy/mimic/video28/params/video28_60hz.csv
+    policy_dir: config/policy/mimic/video28/
+    policy_file: config/policy/mimic/video28/exported/video28_clean.mnn
+    time_start: 0
+    time_end: 20.07
+  Zhanmusi:
+    fps: 60
+    motion_file: config/policy/mimic/zhanmusi_fix/params/zhanmusi_fix_60hz.csv
+    policy_dir: config/policy/mimic/zhanmusi_fix/
+    policy_file: config/policy/mimic/zhanmusi_fix/exported/zhanmusi_fix_clean.mnn
+    time_start: 0
+    time_end: 9.8    # CSV 588 行 / 60fps（g1_mimic_demo config 里的 12.4 是拷贝残留，勿抄）
+  # Touqiu: 已解除按键绑定（2026-09-08 用户要求），状态与轨迹保留备用，无 transitions 指向
+  Touqiu:
+    # App 示教动作"投篮"录制回放（无策略，500Hz PD 跟踪 rt/lowstate 录制轨迹）
+    # 轨迹 CSV 随项目部署，迁移到其他 29dof G1 无需重新示教
+    traj_file: config/policy/replay/touqiu/touqiu_traj.csv
+    time_start: 4.2      # 裁掉录制基线段（触发延迟）
+    time_end: 18.5       # 裁掉尾部静止段（回放时长约 14.3s）
+    speed: 0.5           # 回放速度倍率；首次验证建议改 0.5，确认跟踪良好后恢复 1.0
+    entry_interp: 1.5    # 入口从当前姿态线性过渡到轨迹起点
+    kp: [40.2, 99.1, 40.2, 99.1, 28.5, 28.5, 40.2, 99.1, 40.2, 99.1, 28.5, 28.5, 40.2, 28.5, 28.5, 14.3, 14.3, 14.3, 14.3, 14.3, 16.8, 16.8, 14.3, 14.3, 14.3, 14.3, 14.3, 16.8, 16.8]
+    kd: [2.56, 6.31, 2.56, 6.31, 1.81, 1.81, 2.56, 6.31, 2.56, 6.31, 1.81, 1.81, 2.56, 1.81, 1.81, 0.907, 0.907, 0.907, 0.907, 0.907, 1.07, 1.07, 0.907, 0.907, 0.907, 0.907, 0.907, 1.07, 1.07]

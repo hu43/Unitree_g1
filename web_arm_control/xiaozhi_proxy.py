@@ -1,0 +1,512 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+小智控制台 (xiaozhi.me) 代理模块。
+
+APP 不直接调 xiaozhi.me，由本模块转发：
+  - token 由用户在 APP 里手动粘贴一次（从控制台 F12 复制 localStorage.token）
+  - token 存本地文件 xiaozhi_auth.json（权限 600），APP 端拿不到 token
+  - 所有转发带 Authorization: Bearer <token>
+
+挂载在 web_arm_control/app.py 的 /api/agent/* 路由下。
+
+为什么不用账号密码/手机号登录：
+  - 账号密码登录要图形验证码（captcha session）
+  - 手机号登录要阿里云滑块验证码（只能在浏览器跑，uni-app App 端跑不了）
+  所以改成手动粘 token，最稳。
+"""
+
+import os
+import json
+import time
+import threading
+import logging
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+# ==================== 配置 ====================
+XIAOZHI_BASE = "https://xiaozhi.me/api"
+AUTH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xiaozhi_auth.json")
+
+# 默认智能体 ID（用户指定的控制台智能体）
+DEFAULT_AGENT_ID = "1711120"
+
+# 请求超时
+TIMEOUT = 15
+
+_token_lock = threading.Lock()
+
+
+# ==================== token 存储 ====================
+def _load_auth():
+    """读取本地 {token, agent_id, saved_at}。"""
+    try:
+        with open(AUTH_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.warning(f"读取 xiaozhi_auth.json 失败: {e}")
+    return {}
+
+
+def _save_auth(token, agent_id=None):
+    """保存 token + agent_id 到本地（权限 600）。"""
+    old = _load_auth()
+    with _token_lock:
+        data = {
+            "token": token,
+            "agent_id": agent_id or old.get("agent_id") or DEFAULT_AGENT_ID,
+            "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        try:
+            with open(AUTH_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.chmod(AUTH_FILE, 0o600)
+        except Exception as e:
+            logger.error(f"保存 xiaozhi_auth.json 失败: {e}")
+
+
+def _clear_auth():
+    """清空 token。"""
+    try:
+        if os.path.exists(AUTH_FILE):
+            os.remove(AUTH_FILE)
+    except Exception as e:
+        logger.warning(f"删除 xiaozhi_auth.json 失败: {e}")
+
+
+def _get_token():
+    return _load_auth().get("token")
+
+
+def save_token(token, agent_id=None):
+    """用户手动粘贴 token 后调用。返回 (ok, message)。"""
+    if not token or not isinstance(token, str):
+        return False, "token 为空"
+    token = token.strip()
+    _save_auth(token, agent_id)
+    return True, "token 已保存"
+
+
+def get_agent_id():
+    """当前选中的 agent_id（默认 1711120）。"""
+    return _load_auth().get("agent_id") or DEFAULT_AGENT_ID
+
+
+def set_agent_id(agent_id):
+    """切换当前 agent_id。"""
+    token = _get_token()
+    if token:
+        _save_auth(token, agent_id)
+
+
+# ==================== 通用转发 ====================
+def _xz_request(method, path, *, token=None, json_body=None, params=None):
+    """发请求到 xiaozhi.me，返回 (ok, data_or_errmsg, status)。
+
+    token=None 时不带 Authorization。
+    """
+    url = XIAOZHI_BASE + path
+    # 只有带 body 的请求才设 Content-Type: application/json，
+    # 否则 xiaozhi(同框架) 会报 "Body cannot be empty when content-type is set to application/json"
+    headers = {"Accept": "application/json"}
+    if json_body is not None:
+        headers["Content-Type"] = "application/json"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        resp = requests.request(method, url, json=json_body, params=params,
+                                headers=headers, timeout=TIMEOUT)
+    except requests.RequestException as e:
+        return False, f"网络错误: {e}", 0
+
+    try:
+        body = resp.json() if resp.content else {}
+    except ValueError:
+        body = {"raw": resp.text}
+
+    if resp.status_code >= 200 and resp.status_code < 300:
+        return True, body, resp.status_code
+    msg = body.get("message") if isinstance(body, dict) else None
+    # 401/403 通常意味着 token 失效或无权限
+    if resp.status_code in (401, 403):
+        return False, "token 无效或已过期，请重新粘贴", resp.status_code
+    return False, msg or body or f"HTTP {resp.status_code}", resp.status_code
+
+
+# ==================== 对外接口 ====================
+def auth_status():
+    """验证本地 token 是否有效（GET /api/user/identity-info）。"""
+    token = _get_token()
+    if not token:
+        return True, {"logged_in": False}, 200
+    ok, data, status = _xz_request("GET", "/user/identity-info", token=token)
+    if not ok:
+        return True, {"logged_in": False, "reason": "token 失效"}, 200
+    return True, {"logged_in": True, "user": data, "agent_id": get_agent_id()}, 200
+
+
+def logout():
+    _clear_auth()
+    return True, {"logged_out": True}, 200
+
+
+def list_agents():
+    """GET /api/agents，列智能体。
+
+    xiaozhi 返回结构是 {data: {data: [...], pagination, success}}，
+    真正的智能体数组在 data.data.data，取出来扁平化返回。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/agents", token=token)
+    if not ok:
+        return False, data, status
+    # 兼容两种嵌套：{items:[...]} 或 {items:{data:[...]}}
+    items = data.get("items") if isinstance(data, dict) and "items" in data else data
+    if isinstance(items, dict):
+        # 嵌套结构，取 items.data
+        items = items.get("data") or []
+    if not isinstance(items, list):
+        items = []
+    return True, {"items": items}, status
+
+
+def get_config():
+    """GET /api/agents/{id}，读当前配置。
+
+    xiaozhi 返回 {data:{data:{agent:{...}, message, success}}}，
+    真正配置在 data.data.agent，取出来扁平化返回。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    aid = get_agent_id()
+    ok, data, status = _xz_request("GET", f"/agents/{aid}", token=token)
+    if not ok:
+        return False, data, status
+    # 解嵌套: data -> data.data -> data.data.agent
+    agent = data
+    if isinstance(agent, dict) and isinstance(agent.get("data"), dict):
+        agent = agent["data"]
+    if isinstance(agent, dict) and isinstance(agent.get("agent"), dict):
+        agent = agent["agent"]
+    if not isinstance(agent, dict):
+        agent = {}
+    return True, agent, status
+
+
+def save_config(config):
+    """POST /api/agents/{id}/config，改配置。config 是 dict。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    aid = get_agent_id()
+    ok, data, status = _xz_request("POST", f"/agents/{aid}/config", token=token, json_body=config)
+    if not ok:
+        return False, data, status
+    return True, data, status
+
+
+def list_voices():
+    """音色列表。端点待确认，先试 /voices，404 再试其它。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    for path in ["/voices", "/voice/list", "/tts/voices"]:
+        ok, data, status = _xz_request("GET", path, token=token)
+        if status != 404:
+            if ok:
+                # 解嵌套
+                items = data
+                if isinstance(items, dict) and isinstance(items.get("data"), (list, dict)):
+                    items = items["data"]
+                if isinstance(items, dict) and isinstance(items.get("data"), (list, dict)):
+                    items = items["data"]
+                if not isinstance(items, list):
+                    items = []
+                return True, {"items": items}, status
+            return False, data, status
+    return True, {"items": []}, 200
+
+
+def list_models():
+    """GET /api/roles/model-list，LLM 模型列表。
+
+    返回 {success, data:{modelList:[{name, description, ...}]}}，
+    扁平化返回 modelList。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/roles/model-list", token=token)
+    if not ok:
+        return False, data, status
+    ml = data.get("data", {}).get("modelList") if isinstance(data, dict) else None
+    if not isinstance(ml, list):
+        ml = []
+    return True, {"models": ml}, status
+
+
+def get_tts_list():
+    """GET /api/user/tts-list，音色 + 语言列表。
+
+    返回 {success, data:{languages:[...], tts_voices:{lang:[voice...]}}}。
+    原样返回 data（前端按 language 分组取音色）。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/user/tts-list", token=token)
+    if not ok:
+        return False, data, status
+    d = data.get("data") if isinstance(data, dict) else data
+    if not isinstance(d, dict):
+        d = {"languages": [], "tts_voices": {}}
+    return True, d, status
+
+
+def list_templates():
+    """GET /api/roles/templates，角色模板。
+
+    返回 {success, data:{templates:[{name, voice, language, character}]}}。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/roles/templates", token=token)
+    if not ok:
+        return False, data, status
+    tpls = data.get("data", {}).get("templates") if isinstance(data, dict) else None
+    if not isinstance(tpls, list):
+        tpls = []
+    return True, {"templates": tpls}, status
+
+
+def list_mcp_tools(agent_id=None):
+    """GET /api/agents/common-mcp-tool/list?agentId=X，MCP 端点列表。
+
+    返回 [{endpoint_id, name}, ...]。agent_id 不传则用当前。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    aid = agent_id or get_agent_id()
+    ok, data, status = _xz_request("GET", "/agents/common-mcp-tool/list",
+                                   token=token, params={"agentId": aid})
+    if not ok:
+        return False, data, status
+    # data 可能是 list 或 {data:[...]}
+    items = data.get("data") if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        items = []
+    return True, {"items": items}, status
+
+
+def list_knowledge_bases():
+    """GET /api/knowledge-bases/enum，知识库列表。
+
+    返回 {data:{list:[{id, name, knowledge_base_type}]}}，
+    扁平化返回 list。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/knowledge-bases/enum", token=token)
+    if not ok:
+        return False, data, status
+    d = data.get("data") if isinstance(data, dict) else data
+    items = d.get("list") if isinstance(d, dict) else d
+    if not isinstance(items, list):
+        items = []
+    return True, {"items": items}, status
+
+
+# ==================== 知识库管理（CRUD）====================
+def list_knowledge_bases_page(page=1, page_size=10):
+    """GET /api/knowledge-bases?page=&pageSize=，分页列表。
+
+    返回 {data:{list:[...], pagination}}。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/knowledge-bases", token=token,
+                                   params={"page": page, "pageSize": page_size})
+    if not ok:
+        return False, data, status
+    d = data.get("data") if isinstance(data, dict) else data
+    if not isinstance(d, dict):
+        d = {"list": [], "pagination": {}}
+    return True, d, status
+
+
+def create_knowledge_base(name, description="", status=1):
+    """POST /api/knowledge-bases，创建知识库。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("POST", "/knowledge-bases", token=token,
+                                   json_body={"name": name, "description": description, "status": status})
+    if not ok:
+        return False, data, status
+    return True, data, status
+
+
+def update_knowledge_base(kb_id, name, description="", status=1):
+    """PUT /api/knowledge-bases，改名/改描述。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("PUT", "/knowledge-bases", token=token,
+                                   json_body={"id": kb_id, "name": name,
+                                              "description": description, "status": status})
+    if not ok:
+        return False, data, status
+    return True, data, status
+
+
+def delete_knowledge_base(kb_id):
+    """DELETE /api/knowledge-bases?id=X。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("DELETE", "/knowledge-bases", token=token,
+                                   params={"id": kb_id})
+    if not ok:
+        return False, data, status
+    return True, data, status
+
+
+# ==================== 知识库文档/切片管理 ====================
+def list_documents(kb_id, page=1, page_size=10):
+    """GET /api/knowledge-bases/document?knowledgeBaseId=&page=&pageSize=，文档列表。
+
+    返回 {data:{list:[{id,title,file_size,created_at,task_status,...}], pagination}}。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/knowledge-bases/document", token=token,
+                                   params={"knowledgeBaseId": kb_id,
+                                           "page": page, "pageSize": page_size})
+    if not ok:
+        return False, data, status
+    d = data.get("data") if isinstance(data, dict) else data
+    if not isinstance(d, dict):
+        d = {"list": [], "pagination": {}}
+    return True, d, status
+
+
+def list_chunks(document_id, page=1, page_size=50):
+    """GET /api/knowledge-bases/document/chunk?documentId=&page=&pageSize=，文档切片。
+
+    返回 {data:{list:[{chunk_index, chunk_content}], pagination}}。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("GET", "/knowledge-bases/document/chunk", token=token,
+                                   params={"documentId": document_id,
+                                           "page": page, "pageSize": page_size})
+    if not ok:
+        return False, data, status
+    d = data.get("data") if isinstance(data, dict) else data
+    if not isinstance(d, dict):
+        d = {"list": [], "pagination": {}}
+    return True, d, status
+
+
+def upload_document_file(file_bytes, filename):
+    """POST /api/knowledge-bases/upload-file，上传文件拿 file_md5（multipart）。
+
+    _xz_request 只支持 JSON，这里单独走 requests.post + files=。
+    返回 (ok, body or errmsg, status)，body 形如 {success, data:{file_md5}}。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    url = XIAOZHI_BASE + "/knowledge-bases/upload-file"
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+    try:
+        resp = requests.post(url, headers=headers,
+                             files={"file": (filename, file_bytes)},
+                             timeout=120)
+    except requests.RequestException as e:
+        return False, f"网络错误: {e}", 0
+    try:
+        body = resp.json() if resp.content else {}
+    except ValueError:
+        body = {"raw": resp.text}
+    if 200 <= resp.status_code < 300:
+        # xiaozhi 返回 {success, data:{file_md5, file_name}, message}，扁平化取内层 data
+        d = body.get("data") if isinstance(body, dict) else body
+        if not isinstance(d, dict):
+            d = body
+        return True, d, resp.status_code
+    if resp.status_code in (401, 403):
+        return False, "token 无效或已过期，请重新粘贴", resp.status_code
+    msg = body.get("message") if isinstance(body, dict) else None
+    return False, msg or body or f"HTTP {resp.status_code}", resp.status_code
+
+
+def create_document(kb_id, file_md5,
+                    segment_separator="\n\n", segment_max_tokens=1024,
+                    chunk_overlap=50, remove_extra_spaces=True,
+                    remove_urls_emails=False, optimize_parse=False):
+    """POST /api/knowledge-bases/document，用已上传文件的 md5 建文档。
+
+    分段参数默认值取自 xiaozhi 控制台。
+    """
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    body = {
+        "knowledgeBaseId": kb_id,
+        "fileMd5": file_md5,
+        "segmentSeparator": segment_separator,
+        "segmentMaxTokens": segment_max_tokens,
+        "segmentationChunkOverlap": chunk_overlap,
+        "removeExtraSpaces": remove_extra_spaces,
+        "removeUrlsEmails": remove_urls_emails,
+        "optimizeParse": optimize_parse,
+    }
+    ok, data, status = _xz_request("POST", "/knowledge-bases/document",
+                                   token=token, json_body=body)
+    if not ok:
+        return False, data, status
+    return True, data, status
+
+
+def delete_document(kb_id, document_id):
+    """DELETE /api/knowledge-bases/document?knowledgeBaseId=&documentId=。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request("DELETE", "/knowledge-bases/document", token=token,
+                                   params={"knowledgeBaseId": kb_id,
+                                           "documentId": document_id})
+    if not ok:
+        return False, data, status
+    return True, data, status
+
+
+def optimize_character(character_text):
+    """POST /api/agents/optimize-character，AI 优化人设。"""
+    token = _get_token()
+    if not token:
+        return False, "未登录", 401
+    ok, data, status = _xz_request(
+        "POST", "/agents/optimize-character", token=token,
+        json_body={"character": character_text},
+    )
+    if not ok:
+        return False, data, status
+    return True, data, status

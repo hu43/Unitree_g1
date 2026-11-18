@@ -4,3 +4,11 @@ server.log
 workflows/*.json
 !workflows/.gitkeep
 .DS_Store
+
+# 新增内容的本地敏感/临时文件
+g1_mcp.env
+*.env
+xiaozhi_auth.json
+.venv/
+*.bak*
+logs/

@@ -1,0 +1,29 @@
+[Unit]
+Description=G1 Xiaozhi MCP bridge (dance / squat / move tools)
+Documentation=file:///home/unitree/huang/g1_mcp/README.md
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=unitree
+Group=unitree
+WorkingDirectory=/home/unitree/huang/g1_mcp
+# 等官方运控 / g1-joystick 就绪后再连接云端
+ExecStartPre=/bin/sleep 20
+ExecStart=/bin/bash /home/unitree/huang/g1_mcp/run.sh
+# 与现有 g1-joystick.service 相同的 cgroup 管理方式：
+# 退出时连带结束 xz_pipe.py 与 stdio 子进程，不留孤儿进程
+KillMode=control-group
+Restart=on-failure
+RestartSec=10
+# 资源隔离：不与 g1_ctrl（taskset 4-7）抢核
+Nice=5
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

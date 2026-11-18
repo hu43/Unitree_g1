@@ -1,0 +1,4 @@
+# G1 小野AI MCP 桥依赖
+# 机器人系统 python3.8 已自带 websockets 11.0.3，正常无需安装任何东西。
+# 若目标机缺失，仅需：pip3 install --user "websockets>=11"
+websockets>=11

@@ -1,0 +1,134 @@
+{
+  "_说明": [
+    "G1 小野AI MCP 可播放的 8 个带 BGM 训练策略。",
+    "按键与 G1_joystick/out/config/config.yaml 的 FSM.transitions 完全一致：",
+    "先按住 modifier，再给 trigger 按下沿并保持 hold 秒。",
+    "BGM 由现有 music_helper.py 自动同步，MCP 侧不做音频。",
+    "安全：2026-11-17 实机下蹲过程中发生摔倒（706 蹲姿 + 阻尼路径不稳定），",
+    "      因此 squat/stand_up 永久停用，move 默认停用，绝不自动发送 1/0/500/702/706。",
+    "      只有舞蹈（按键注入，与实体遥控器同一通道）保持可用。"
+  ],
+  "squat_mode": "disabled",
+  "safety": {
+    "allow_squat": false,
+    "allow_stand": false,
+    "allow_move": true
+  },
+  "dances": {
+    "Gangnam": {
+      "name": "江南Style",
+      "modifier": "F2",
+      "trigger": "Up",
+      "hold": 0.5,
+      "duration": 20.4,
+      "bgm": "江南Style",
+      "policy": "unistore/gangnam_style.mnn",
+      "note": "F3(F2)+↑，BGM 先播 4s"
+    },
+    "Jixiewu1": {
+      "name": "机械舞1",
+      "modifier": "F2",
+      "trigger": "Left",
+      "hold": 0.5,
+      "duration": 20.6,
+      "bgm": "HOZIN机械舞曲",
+      "policy": "jixiewu1_fix.mnn",
+      "note": "F3(F2)+←，BGM 先播 4s"
+    },
+    "Jixiewu2": {
+      "name": "机械舞2",
+      "modifier": "F2",
+      "trigger": "Right",
+      "hold": 0.5,
+      "duration": 12.4,
+      "bgm": "霓虹迪斯科",
+      "policy": "jixiewu2_fix.mnn",
+      "note": "F3(F2)+→，BGM 先播 4s"
+    },
+    "Video27": {
+      "name": "Video27",
+      "modifier": "F2",
+      "trigger": "Down",
+      "hold": 0.5,
+      "duration": 28.2,
+      "bgm": "Wanderlust",
+      "policy": "video27_fix_clean.mnn",
+      "note": "F3(F2)+↓，BGM 先播 4s"
+    },
+    "Video22": {
+      "name": "功夫",
+      "modifier": "Up",
+      "trigger": "Y",
+      "hold": 0.5,
+      "duration": 67.9,
+      "bgm": "功夫曲",
+      "policy": "video22_fix_clean.mnn",
+      "note": "↑+Y，BGM 先播 4s"
+    },
+    "Video25": {
+      "name": "广播体操",
+      "modifier": "Up",
+      "trigger": "B",
+      "hold": 0.5,
+      "duration": 91.6,
+      "bgm": "功夫曲",
+      "policy": "video25_clean.mnn",
+      "note": "↑+B，BGM 已换成功夫曲，先播 4s"
+    },
+    "Kungfu3": {
+      "name": "功夫3",
+      "modifier": "Up",
+      "trigger": "X",
+      "hold": 0.5,
+      "duration": 92.8,
+      "bgm": "男儿当自强",
+      "policy": "Kungfu3_fix_clean.mnn",
+      "note": "↑+X，BGM 前奏 12.5s 播完才起动作"
+    },
+    "Su": {
+      "name": "Su",
+      "modifier": "Left",
+      "trigger": "X",
+      "hold": 0.5,
+      "duration": 5.1,
+      "bgm": "SIUUU音效",
+      "policy": "su_clean.mnn",
+      "note": "←+X，BGM 与动作同起同停"
+    }
+  },
+  "aliases": {
+    "江南style": "Gangnam",
+    "江南": "Gangnam",
+    "江南舞": "Gangnam",
+    "gangnam": "Gangnam",
+    "gangnamstyle": "Gangnam",
+    "机械舞1": "Jixiewu1",
+    "机械舞一": "Jixiewu1",
+    "jixiewu1": "Jixiewu1",
+    "jxw1": "Jixiewu1",
+    "机械舞2": "Jixiewu2",
+    "机械舞二": "Jixiewu2",
+    "jixiewu2": "Jixiewu2",
+    "jxw2": "Jixiewu2",
+    "video27": "Video27",
+    "视频27": "Video27",
+    "27": "Video27",
+    "27号": "Video27",
+    "wanderlust": "Video27",
+    "video22": "Video22",
+    "功夫": "Video22",
+    "功夫视频": "Video22",
+    "video25": "Video25",
+    "广播体操": "Video25",
+    "体操": "Video25",
+    "广播操": "Video25",
+    "kungfu3": "Kungfu3",
+    "功夫3": "Kungfu3",
+    "男儿当自强": "Kungfu3",
+    "真功夫": "Kungfu3",
+    "su": "Su",
+    "siuuu": "Su",
+    "siu": "Su",
+    "庆祝": "Su"
+  }
+}
