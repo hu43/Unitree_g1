@@ -1,169 +1,236 @@
-# Unitree G1 DIY 指令卡
+# Unitree G1 —— Web 控制台 + 语音 MCP
 
-一张 Scratch 风格的可拼接机器人指令卡：拖拽积木拼出讲解/巡展流程，点击运行即可通过 Unitree SDK 在 G1 人形机器人上真实执行。
+本分支 `feature/web-arm-control-voice-mcp` 在原有 DIY 指令卡项目之上，集成两块能力：
 
-- 前端：单页 HTML，模块化积木、参数编辑、拖拽排序、俯视地图与手臂姿态演算。
-- 后端：Python 标准库 HTTP 服务，通过 Unitree SDK2（DDS）下发运动、手臂动作和 TTS。
-- 部署：systemd 常驻，开机自启，浏览器打开机器人 IP 即可使用。
+1. **`web_arm_control/`**：机器人 `http://<robot-ip>:5000/` 的完整 Web 控制台源码
+   （机械臂、运动/FSM、导航建图、展览路径、人脸迎宾、手势控制、小夜语音代理等）。
+2. **`g1_mcp/`**：小野AI 语音 MCP 工具（8 个），让小野能语音播放 8 个带 BGM 的
+   训练策略、停止、限时移动。
 
-![blocks](https://img.shields.io/badge/robot-G1-38bdf8) ![python](https://img.shields.io/badge/python-3.8-blue)
+另外附带 **`patches/`**：让语音真正能触发策略的控制器改动（新增 `rt/g1mcp/cmd`
+指令主题），以及 BGM 前奏/丢帧修复。所有改动都是**只增不改**，原有实体遥控器逻辑未动。
 
-## 功能
-
-| 功能 | 说明 |
-|---|---|
-| 积木拼接 | 前进/后退/左移/右移、左转/右转、右臂挥手、左臂挥手、向前挥手、放下手臂、复位、播报、停顿 |
-| 真机执行 | 行走用 `SetVelocity` 持续下发；转向读取 `rt/odommodestate` 做闭环 |
-| 语音播报 | `AudioClient.TtsMaker`，默认音量 100 |
-| 保存工作流 | 保存到机器人磁盘 `workflows/`，可载入/删除 |
-| 语音启动 | 订阅 `rt/audio_msg`，说“开始执行”或“启动工作流”即运行当前工作流 |
-| 安全机制 | 现场确认、FSM 校验、限速、8 秒前端失联自动停车、停止即 `StopMove` + 手臂释放 |
+> `main` 分支原有的 DIY 指令卡项目保持原样。原 README 见
+> [README_DIY_CARD.md](README_DIY_CARD.md)。
 
 ## 目录结构
 
 ```
 .
-├── g1_card_server.py          # HTTP + DDS 后端
-├── build_web.py               # 由 web_src/ + web_bridge.js 生成 web/index.html
-├── web_src/
-│   └── robot-diy-blocks.html  # 指令卡 UI（积木、舞台、演算）
-├── web_bridge.js              # 真机桥接：调用后端 API、语音/工作流 UI
-├── web/
-│   ├── index.html             # 已生成的页面（可直接部署）
-│   └── vendor/lucide-1.17.0.js
-├── robot-diy-card.service     # systemd 单元
-├── test_control_sim.py        # 闭环控制逻辑单元测试（模拟里程计）
-├── test_features.py           # 保存工作流 / 语音触发 API 测试
-└── workflows/                 # 运行时生成的工作流 JSON
+├── web_arm_control/          # 5000 端口 Web 控制台
+│   ├── app.py                # Flask + SocketIO + DDS/ROS 主程序
+│   ├── templates/index.html  # 单页前端
+│   ├── xiaozhi_proxy.py      # 小夜/小智代理（token 存本地）
+│   ├── announce_xiaoye.py
+│   ├── start_service.sh      # 含 ROS 环境的启动脚本
+│   ├── requirements.txt
+│   └── xiaozhi_auth.example.json
+├── g1_mcp/                   # 小野AI MCP 语音工具
+│   ├── g1_mcp_server.py      # stdio MCP 服务（8 个工具 + 安全互锁）
+│   ├── xz_pipe.py            # 出站 WebSocket ↔ stdio 桥
+│   ├── dances.json           # 8 个策略的按键/时长/BGM/别名 + safety 开关
+│   ├── run.sh / g1-mcp.service
+│   ├── probe_firmware.py / test_mcp.py / test_live_dance.py
+│   ├── test_live_move.py / test_event_reliability.py
+│   ├── measure_audio.py / trim_bgm.py
+│   ├── g1_mcp.env.example
+│   └── README.md             # 详细部署、验证、回滚
+├── patches/                  # 控制器与 BGM 补丁
+│   ├── g1_ctrl/              # 新增 rt/g1mcp/cmd 指令主题
+│   ├── g1_joystick/          # music_helper / config / run.sh
+│   ├── g1_ctrl.patch
+│   ├── g1_joystick.patch
+│   └── README.md
+├── README.md                 # 本文件
+├── README_DIY_CARD.md        # main 分支原有项目说明（保留）
+└── （main 分支原有 DIY 指令卡代码：g1_card_server.py、web/ 等）
 ```
 
-## 环境要求
+## 一、web_arm_control（5000 端口控制台）
 
-- 机器人：Unitree G1，内置运控可用（走跑运控 FSM 802，或旧固件 801）。
-- 机器人侧：Python 3.8、`unitree_sdk2py` 已安装、`eth0` 在机器人内网（192.168.123.x）。
-- 浏览器与机器人同一局域网。
+一个 Flask + SocketIO 单页应用，运行在机器人本机（Python 3.8），监听 `0.0.0.0:5000`。
 
-## 部署
+### 功能分组
 
-```bash
-# 在机器人上
-mkdir -p /home/unitree/robot-diy-card
-# 将本仓库的 g1_card_server.py、web/、web_bridge.js 复制到该目录
-
-sudo cp robot-diy-card.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now robot-diy-card
-
-# 查看状态
-systemctl status robot-diy-card
-curl http://127.0.0.1:8080/api/status
-```
-
-浏览器访问：`http://<机器人IP>:8080/`
-
-## 使用
-
-1. 站在机器人旁边，确认 2 米内无人、无障碍，遥控器在手边。
-2. 拖拽左侧积木到中间拼流程，参数可直接改。
-3. 点“运行”，在确认弹窗点“确定”。
-4. 停止：点“停止”或按遥控器急停；关闭页面 8 秒后后端会自动停车。
-
-### 积木 → 真机接口
-
-| 积木 | 执行方式 |
+| 分组 | 功能 |
 |---|---|
-| 向前/后、左/右移 | `LocoClient.SetVelocity`，按里程计位移闭环停车 |
-| 左转/右转 | `SetVelocity(0,0,±1.0)` 持续下发，按 yaw 闭环停车 |
-| 右臂挥手 | 手臂动作 23 `right_hand_up` |
-| 向前挥手 | 手臂动作 25 `wave_under_head` |
-| 左臂挥手 | 固件无独立左臂挥手，使用 15 `both_hands_up` |
-| 放下手臂 / 复位 | 手臂动作 99 `release_arm` |
-| 播报 | `AudioClient.TtsMaker(text, 0)` |
-| 停顿 | 阻塞等待 |
+| 机械臂 | 16 种预设动作、动作列表、自定义执行（`/api/actions`、`/api/execute`） |
+| 运动与模式 | FSM 模式切换、档位/速度、虚拟遥控、急停（`/api/set_fsm`、`/api/set_velocity`、`/api/emergency_stop`、`/api/set_gear`） |
+| 状态与电量 | 健康检查、实时状态、BMS 电量（`/api/health`、`/api/status`） |
+| 导航与建图 | 启动/停止导航、建图、保存/选择地图、PCD 校验、重定位、RViz 视频流（`/api/start_navigation`、`/api/start_mapping`、`/api/save_map`、`/api/relocate`、`/rviz_stream`） |
+| 展览路径 | 站点增删改、保存/加载/运行路径（`/api/exhibition/*`） |
+| 迎宾与手势 | 人脸迎宾、ROS2 手势控制（`/api/start_face_greet`、`/api/start_gesture_control`） |
+| 小夜语音代理 | 启动/停止、token 管理、agent/音色/模型选择（`xiaozhi_proxy.py`、`/api/agent/*`） |
+| 其他 | 网络接口枚举、语音动作列表、WebSocket 实时日志 |
 
-### 语音启动
+### 启动
 
-- 机器人需处于唤醒模式（APP/遥控器切换）。
-- 说 **“开始执行”** 或 **“启动工作流”**。
-- 运行的是当前页面同步给后端的工作流；页面关闭后使用最后一次同步的内容。
-- 10 秒冷却；FSM 不满足或机器人未站稳时拒绝执行。
-- 关键词可通过环境变量 `G1_VOICE_KEYWORDS` 修改，语音开关在页面上。
+```bash
+cd web_arm_control
+pip3 install -r requirements.txt          # Flask 2.3.3 / Flask-SocketIO 5.3.5
 
-### 保存工作流
+export PYTHONPATH=/home/unitree/tang/WK/unitree_sdk2_python:$PYTHONPATH
+export LD_LIBRARY_PATH=/home/unitree/tang/cyclonedds/install/lib:$LD_LIBRARY_PATH
+python3.8 app.py eth0                     # http://<机器人IP>:5000
 
-- “保存工作流”输入名称，写入机器人 `workflows/<名称>.json`。
-- 下拉框选择即可载入；“删除”会二次确认。
-- 页面上的当前积木会每 1.2 秒自动同步给后端，供语音启动使用。
+# 导航/手势等 ROS 子功能需要 ROS 环境，用项目自带脚本：
+./start_service.sh
+```
 
-## 配置（systemd 环境变量）
+依赖：`unitree_sdk2py` + `cyclonedds`（机器人已装），ROS Noetic（仅导航/手势功能需要）。
 
-| 变量 | 默认 | 说明 |
+### 安全与凭据
+
+- 小夜/小智 token 只保存在机器人本地 `xiaozhi_auth.json`（**600 权限，不入库**），
+  仓库只提供 `xiaozhi_auth.example.json`。
+- `app.config['SECRET_KEY']` 仍是默认值 `secret!`，对外暴露前请改掉。
+- 页面本身没有登录鉴权，请只在受控局域网内使用。
+
+## 二、g1_mcp（小野AI 语音 MCP）
+
+```
+小野AI 云端  wss://api.xiaozhi.me/mcp/?token=<TOKEN>
+      ▲  出站 WebSocket（token 只在 g1_mcp.env，600 权限）
+  xz_pipe.py            # WebSocket ↔ stdio 桥，断线指数退避重连
+      │  stdio / MCP JSON-RPC 2.0
+  g1_mcp_server.py      # 8 个工具 + 安全互锁
+      ├─ rt/g1mcp/cmd        → g1_ctrl（新增只增指令主题）
+      ├─ rt/g1joystick/event ← 启动/停止事件回读（确认指令生效）
+      └─ LocoClient (sport)  ← GetFsmId / SetVelocity（仅 move 用）
+```
+
+### 工具
+
+| 工具 | 状态 | 说明 |
 |---|---|---|
-| `G1_IFACE` | `eth0` | DDS 网卡 |
-| `G1_PORT` | `8080` | HTTP 端口 |
-| `G1_MAX_SPEED` | `0.6` | 最大步速 m/s |
-| `G1_VOLUME` | `100` | TTS 音量 0–100 |
-| `G1_TURN_RATE` | `1.0` | 转向角速度 rad/s（重要，见下） |
-| `G1_VY_LEFT_SIGN` | `1` | 左移方向，若左右相反改为 `-1` |
-| `G1_WATCHDOG` | `8` | 前端失联自动停车秒数，0 关闭 |
-| `G1_VOICE_ENABLE` | `1` | 语音启动开关 |
-| `G1_VOICE_KEYWORDS` | `开始执行,启动工作流` | 触发词 |
-| `G1_DRY_RUN` | `0` | 1 = 只演算不下发 |
+| `robot_status` | 可用 | FSM、g1_ctrl / music_helper、当前策略（前奏/执行中） |
+| `dance_list` | 可用 | 8 个舞蹈的名称、时长、BGM |
+| `dance_play(dance)` | 可用 | 立即返回；支持中文名与别名 |
+| `dance_stop` | 可用 | 发 `stop`，走原 `exit_mimic` → Exit 路径，BGM 同步停止 |
+| `squat` | **停用** | 实机蹲姿摔倒后永久停用，只提示用实体遥控器 |
+| `stand_up` | **停用** | 同上，MCP 不发送任何姿态切换指令 |
+| `move(vx,vy,vyaw,duration_s)` | 可用（限速） | 0.2–3 秒，到时强制 StopMove；仅 FSM=802 可用 |
+| `move_stop` | 可用 | 仅在确实移动时发 StopMove |
 
-## 已知行为
+### 可播放的 8 个策略
 
-- **转向死区**：该固件在 FSM 802 下纯 yaw 指令 0.5 rad/s 会被忽略，需使用 1.0 rad/s；本项目已按 1.0 配置，并保留闭环停车与方向自动纠正。
-- 原地转向时步态会让机器人位置漂移几厘米到十几厘米；地图不显示这部分漂移，后续位移仍按里程计闭环。
-- 距离控制依赖里程计；地面打滑或搬运机器人后需要重新对齐。
-- `is_final` 在默认非流式 ASR 下可能始终为 false，因此语音触发使用“关键词 + 置信度 + 去重”，不依赖该字段。
+| 舞蹈 | 时长 | BGM |
+|---|---|---|
+| 江南Style | 20.4s | 江南Style（前奏 4s） |
+| 机械舞1 | 20.6s | HOZIN 机械舞曲（前奏 4s） |
+| 机械舞2 | 12.4s | 霓虹迪斯科（前奏 4s） |
+| Video27 | 28.2s | Wanderlust（前奏 3s，已裁掉 1s 静音） |
+| 功夫 | 67.9s | 功夫曲（前奏 1.5s，已裁掉 2.5s 轻柔段） |
+| 广播体操 | 91.6s | 功夫曲（前奏 1.5s，已裁掉 2.5s 轻柔段） |
+| 功夫3 | 92.8s | 男儿当自强（前奏 12.5s） |
+| Su | 5.1s | SIUUU 音效（同起同停） |
 
-## 测试
-
-```bash
-# 闭环控制逻辑（无需机器人）
-python3 test_control_sim.py
-
-# 工作流/语音 API（机器人后端已启动）
-python3 test_features.py
-```
-
-## 开发
-
-修改 `web_src/robot-diy-blocks.html` 或 `web_bridge.js` 后重新生成页面：
+### 部署
 
 ```bash
-python3 build_web.py
+# 目录放到机器人
+scp -r g1_mcp unitree@<robot-ip>:/home/unitree/huang/
+
+# 接入点（600 权限，token 不入库）
+cat > /home/unitree/huang/g1_mcp/g1_mcp.env <<'EOF'
+MCP_ENDPOINT='wss://api.xiaozhi.me/mcp/?token=<TOKEN>'
+G1_MCP_IFACE=eth0
+EOF
+chmod 600 /home/unitree/huang/g1_mcp/g1_mcp.env
+
+# 手动试跑 / 开机自启
+cd /home/unitree/huang/g1_mcp && ./run.sh
+sudo cp g1-mcp.service /etc/systemd/system/ && sudo systemctl daemon-reload
+sudo systemctl enable --now g1-mcp
 ```
 
-后端接口：
+依赖：机器人系统 `python3.8` 自带 `websockets 11`，DDS 复用现有 `G1_joystick/vendor`，
+无需额外安装。
 
+### 验证
+
+```bash
+python3 test_mcp.py                                   # 本地协议/工具自测
+python3.8 probe_firmware.py --step status             # 实机只读
+python3.8 test_live_dance.py --yes --dance Su         # 实机舞蹈（最短）
+python3.8 test_live_dance.py --yes --dance Jixiewu2 --stop-after 3   # 中途停止
+python3.8 test_live_move.py --yes --vx 0.1 --duration 0.5           # 移动低速
 ```
-GET  /api/status              机器人/SDK/FSM/音量/里程计/ASR 状态
-GET  /api/state               当前任务进度、位姿、日志
-POST /api/run                 执行工作流 {"confirm":true,"speed":0.5,"blocks":[...]}
-POST /api/stop                停止（StopMove + 手臂释放）
-GET/POST/DELETE /api/workflows  工作流保存/列表/载入/删除
-POST /api/current             同步当前工作流（语音启动使用）
-GET/POST /api/voice           语音开关与最近识别结果
-POST /api/voice/trigger       测试语音启动（不经过麦克风）
+
+### 安全设计
+
+- 只走 `rt/g1mcp/cmd` 指令主题，动作仍由 `g1_ctrl` 原有的姿态/超时/DDS 断连保护兜底。
+- 仅官方 FSM=802 允许动作；1000/503/1/0 明确拒绝。
+- 停止复用原 `Exit` 路径，BGM 必然同步停止。
+- 移动保留 3 秒上限、速度限幅、到点强制 StopMove、FSM 离开 802 立即停、进程退出兜底。
+- 不做任何自动 `Damp()` / `ZeroTorque`。
+
+## 三、patches（控制器与 BGM 补丁）
+
+### g1_ctrl：新增语音指令主题（只增不改）
+
+| 文件 | 改动 |
+|---|---|
+| `include/FSM/McpCommand.h` | **新增**：线程安全指令槽（start 3s 过期；stop 一次性标志） |
+| `main.cpp` | 新增订阅 `rt/g1mcp/cmd`（std_msgs/String_） |
+| `include/FSM/State_Passive.h` | 追加 8 个状态名检查；`exit()` 清指令 |
+| `include/FSM/State_Exit.h` | 追加相同检查（舞蹈结束后停在 Exit 时仍可语音触发） |
+| `src/State_Mimic.cpp` | 追加 `stop` 检查；音乐事件连发 3 帧 |
+
+为什么必须加：实测本固件**不支持虚拟遥控注入**（`rt/lowstate.wireless_remote` 恒为 0，
+而 `g1_ctrl` 只读该字段），所以需要一条新的指令主题。
+
+### g1_joystick：BGM 时序与可靠性
+
+| 文件 | 改动 |
+|---|---|
+| `music/music_helper.py` | Video22/25 跳过 2.5s 轻柔前奏、Video27 跳过 1s 静音；订阅改为 KEEP_LAST(20) 轮询读取；1s 内同名事件去重 |
+| `config/config.yaml` | 对应 `music_lead` 同步缩短（动作与节拍对齐不变） |
+| `run.sh` | helper 加 `-u`（仅实时日志） |
+
+为什么：实测单帧事件 5 次丢 2 次、`stop` 全丢（导致偶发没音乐）；Video22/25 开头偏轻、
+Video27 开头静音（导致“音乐偏晚”）。
+
+### 应用方式
+
+见 [patches/README.md](patches/README.md)，核心步骤：
+
+```bash
+cd /home/unitree/huang/unitree-app-templates/G1_joystick
+# 覆盖 g1_ctrl 文件后
+cmake -S . -B build_mcp -DCMAKE_BUILD_TYPE=Release
+nice -n 15 taskset -c 0-3 cmake --build build_mcp -j4
+cp build_mcp/g1_ctrl out/bin/g1_ctrl.new && mv -f out/bin/g1_ctrl.new out/bin/g1_ctrl
+sudo systemctl restart g1-joystick     # 成功标志：[mcp] listening on rt/g1mcp/cmd
 ```
 
-## 安全声明
+裁剪后的 BGM 缓存（`Video22_2.5s.wav` 等）由 `g1_mcp/trim_bgm.py` 生成，不入库。
 
-本项目会驱动真实人形机器人运动。首次运行前必须确认场地安全、机器人站稳、急停手段可用。语音启动会直接执行当前工作流，请谨慎选择工作流内容并保持唤醒词唯一。
+## 四、原有 DIY 指令卡（main 分支）
 
-## 附加：Web 机械臂控制台 + 语音 MCP（本分支新增）
+`main` 分支的 Scratch 风格指令卡项目（`g1_card_server.py`、`web/`、`workflows/` 等）
+保持不变，详细说明见 [README_DIY_CARD.md](README_DIY_CARD.md)。
 
-本分支在原有 DIY 指令卡项目之上，新增三个目录，原文件未改动：
+## 五、安全声明
 
-- **`web_arm_control/`**：机器人 `http://<robot-ip>:5000/` 的完整 Flask 控制台源码
-  （机械臂动作、FSM 模式切换、电量、导航、小智语音代理等）。
-  token 只保存在机器人本地 `xiaozhi_auth.json`（600 权限），仓库仅提供
-  `xiaozhi_auth.example.json`。
-- **`g1_voice_mcp/`**：小野AI MCP 语音工具（8 个）：状态、舞蹈列表、播放 8 个带 BGM
-  策略、停止、限时移动、停止移动；蹲下/站起来因实机摔倒事故已安全停用。
-  含 WebSocket 桥、systemd 单元、自测脚本与完整部署文档。
-- **`patches/`**：对现有 `G1_joystick` 的只增不改补丁（新增 `rt/g1mcp/cmd` 指令主题、
-  修复 BGM 前奏偏轻/偏晚与事件丢帧），以及可审查的统一 diff。
+本项目会驱动真实人形机器人运动：
 
-各目录内 README 有详细部署、验证与回滚步骤。
+- 首次运行前确认场地安全（2 米内无人、无障碍）、机器人站稳、急停/遥控器在手边。
+- 蹲下/站起来已因实机摔倒事故停用，请使用实体遥控器。
+- 语音触发会直接执行动作，请保持唤醒词唯一并避免在机器人负载不稳时使用。
+- Web 控制台没有鉴权，请勿暴露到公网。
+
+## 六、回滚
+
+```bash
+# 语音 MCP
+sudo systemctl disable --now g1-mcp
+rm -rf /home/unitree/huang/g1_mcp
+
+# 控制器补丁：还原改动前备份后重启
+sudo systemctl restart g1-joystick
+
+# BGM：还原 music_helper.py / config.yaml / run.sh 备份后重启
+```
+
+详细命令见 `g1_mcp/README.md` 与 `patches/README.md`。

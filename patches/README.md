@@ -44,4 +44,4 @@ sudo systemctl restart g1-joystick
 为什么：实测单帧 BEST_EFFORT 事件 5 次丢 2 次、stop 全丢（导致偶发没音乐）；
 Video22/25 开头 2.5s 很轻、Video27 开头 1s 静音（导致“音乐偏晚”）。
 
-`Video22_2.5s.wav` 等裁剪缓存由 `g1_voice_mcp/trim_bgm.py` 生成，不入库。
+`Video22_2.5s.wav` 等裁剪缓存由 `g1_mcp/trim_bgm.py` 生成，不入库。
